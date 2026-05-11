@@ -11,13 +11,15 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.yingjian.core.ui.common.YingJianBottomNavigationBar
-import com.yingjian.core.ui.navigation.NavDestinations
 import com.yingjian.core.ui.navigation.YingJianNavHost
 import com.yingjian.core.ui.theme.YingJianTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val deps = (application as YingJianApplication).deps
+
         setContent {
             YingJianTheme {
                 val navController = rememberNavController()
@@ -42,7 +44,8 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     YingJianNavHost(
                         navController = navController,
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding),
+                        deps = deps
                     )
                 }
             }
