@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">影笺</string>
+    <string name="tab_memories">影记</string>
+    <string name="tab_photobook">画册</string>
+    <string name="tab_settings">设置</string>
+    <string name="nav_back">返回</string>
+    <string name="add_photo">添加照片</string>
+    <string name="mood_hint">此刻心情</string>
+    <string name="publish">发布</string>
+    <string name="create_photobook">创建画册</string>
+    <string name="select_photos">选择照片</string>
+    <string name="preview_selected">预览选中 (%1$d)</string>
+    <string name="complete">完成 (%1$d)</string>
+    <string name="all_photos">全部照片</string>
+    <string name="browse_by_month">按月份浏览</string>
+    <string name="auto_layout">自动布局中</string>
+    <string name="auto_layout_desc">正在为您精选照片并排列排版，请稍候片刻...</string>
+    <string name="edit">编辑</string>
+    <string name="save">保存</string>
+    <string name="export_pdf">导出 PDF</string>
+    <string name="canvas_size">画布尺寸</string>
+    <string name="paper_a4">A4</string>
+    <string name="paper_6inch">6寸</string>
+    <string name="paper_square">方形</string>
+    <string name="delete">删除</string>
+    <string name="zoom_in">放大</string>
+    <string name="zoom_out">缩小</string>
+    <string name="fit_page">适合页面</string>
+    <string name="storage_local">本地存储</string>
+    <string name="storage_s3">Amazon S3</string>
+    <string name="storage_smb">SMB</string>
+    <string name="storage_ftp">FTP</string>
+    <string name="connected">已连接</string>
+    <string name="not_configured">未配置</string>
+    <string name="test_connection">测试连接</string>
+    <string name="server">服务器</string>
+    <string name="port">端口</string>
+    <string name="account">账号</string>
+    <string name="path">路径</string>
+    <string name="undo">撤销</string>
+    <string name="switched_to_auto">已切换为自动排版</string>
+</resources>
