@@ -1,5 +1,6 @@
 package com.yingjian.feature.memories
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,9 +17,11 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -82,15 +85,35 @@ fun TimelineView(
                         )
                     ) {
                         Column {
-                            AsyncImage(
-                                model = featured.imageUri,
-                                contentDescription = featured.moodText,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(4f / 3f)
-                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                            )
+                            Box {
+                                AsyncImage(
+                                    model = featured.imageUri,
+                                    contentDescription = featured.moodText,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(4f / 3f)
+                                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                )
+                                // Photo count badge (top-right)
+                                val allUris = remember(featured.imageUrisJson) { featured.getAllImageUris() }
+                                if (allUris.size > 1) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(8.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "${allUris.size}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text(
                                     dateFormatter.format(featured.timestamp),
