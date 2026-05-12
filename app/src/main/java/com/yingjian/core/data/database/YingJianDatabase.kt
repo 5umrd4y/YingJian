@@ -24,7 +24,11 @@ data class MemoryRecordEntity(
     val moodText: String?,
     val tags: String,
     val createdAt: Long,
-    @androidx.room.ColumnInfo(name = "photo_count", defaultValue = "1") val photoCount: Int = 1
+    @Deprecated("Derived from imageUrisJson.length, not written")
+    @androidx.room.ColumnInfo(name = "photo_count", defaultValue = "1")
+    val photoCount: Int = 1,
+    @androidx.room.ColumnInfo(name = "image_uris_json", defaultValue = "[]")
+    val imageUrisJson: String = "[]"
 )
 
 @Dao
@@ -111,9 +115,10 @@ interface PageLayoutDao {
 @TypeConverters(Converters::class)
 @androidx.room.Database(
     entities = [MemoryRecordEntity::class, PhotobookEntity::class, PageLayoutEntity::class],
-    version = 2,
+    version = 3,
     autoMigrations = [
-        androidx.room.AutoMigration(from = 1, to = 2)
+        androidx.room.AutoMigration(from = 1, to = 2),
+        androidx.room.AutoMigration(from = 2, to = 3)
     ],
     exportSchema = true
 )
