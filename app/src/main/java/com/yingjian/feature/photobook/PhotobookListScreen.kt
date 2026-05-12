@@ -41,7 +41,8 @@ import java.util.Locale
 @Composable
 fun PhotobookListScreen(
     viewModel: PhotobookViewModel,
-    onNavigateToPhotoPicker: (PaperSize) -> Unit = {}
+    onNavigateToPhotoPicker: (PaperSize) -> Unit = {},
+    onNavigateToEditor: (Long) -> Unit = {}
 ) {
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -86,7 +87,7 @@ fun PhotobookListScreen(
                 items(viewModel.uiState.photobooks) { book ->
                     PhotobookCard(
                         photobook = book,
-                        onClick = { /* Navigate to editor */ },
+                        onClick = { onNavigateToEditor(book.id) },
                         onDelete = { viewModel.deletePhotobook(book) }
                     )
                 }

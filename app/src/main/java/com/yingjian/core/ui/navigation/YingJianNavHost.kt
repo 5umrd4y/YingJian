@@ -1,9 +1,13 @@
 package com.yingjian.core.ui.navigation
 
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
@@ -18,10 +22,18 @@ import com.yingjian.feature.memories.MemoriesViewModel
 import com.yingjian.feature.memories.NewPostScreen
 import com.yingjian.feature.memories.getImageDimensions
 import com.yingjian.feature.photobook.PhotoPickerScreen
+import com.yingjian.feature.photobook.PhotobookEditorScreen
 import com.yingjian.feature.photobook.PhotobookScreen
 import com.yingjian.feature.photobook.PhotobookViewModel
+import com.yingjian.feature.photobook.export.PdfExportUtil
+import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.LayoutMode
+import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
+import com.yingjian.core.data.database.PageLayoutEntity
+import com.yingjian.core.util.ElementSerializer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -80,6 +92,9 @@ fun YingJianNavHost(
                     // Store paperSize in savedStateHandle for PhotoPicker to read
                     backStackEntry.savedStateHandle.set("paperSize", paperSize.name)
                     navController.navigate(NavDestinations.PhotoPicker.route)
+                },
+                onNavigateToEditor = { photobookId ->
+                    navController.navigate(NavDestinations.PhotobookEditor.createRoute(photobookId))
                 }
             )
         }
@@ -126,6 +141,99 @@ fun YingJianNavHost(
                     navController.popBackStack()
                 }
             )
+        }
+        composable("photobook_editor/{photobookId}") { backStackEntry ->
+            val factory = PhotobookViewModel.factory(
+                deps.photobookRepository,
+                deps.memoryRepository
+            )
+            val viewModel: PhotobookViewModel = viewModel(factory = factory)
+            val photobookId = backStackEntry.arguments?.getString("photobookId")?.toLongOrNull()
+
+            val context = LocalContext.current
+
+            // Load BookState from repository
+            var loadedBookState by remember { mutableStateOf<BookState?>(null) }
+
+            LaunchedEffect(photobookId) {
+                if (photobookId != null) {
+                    val photobook = withContext(Dispatchers.IO) {
+                        deps.photobookRepository.getPhotobookById(photobookId)
+                    }
+                    if (photobook != null) {
+                        val pageLayouts = withContext(Dispatchers.IO) {
+                            deps.photobookRepository.getPageLayouts(photobookId)
+                        }
+                        val pages = pageLayouts.map { layout ->
+                            val elements = try {
+                                ElementSerializer.deserialize(layout.elementsJson)
+                            } catch (e: Exception) {
+                                emptyList()
+                            }
+                            PageState(
+                                pageNumber = layout.pageNumber,
+                                elements = elements,
+                                trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
+                                trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
+                            )
+                        }
+                        loadedBookState = BookState(
+                            photobook = photobook,
+                            pages = pages,
+                            currentPage = 0,
+                            mode = LayoutMode.MANUAL
+                        )
+                    }
+                }
+            }
+
+            // PDF export launcher
+            val pdfBytesState = remember { mutableStateOf<ByteArray?>(null) }
+            val createPdf = rememberLauncherForActivityResult(
+                ActivityResultContracts.CreateDocument("application/pdf")
+            ) { uri ->
+                uri?.let {
+                    val bytes = pdfBytesState.value ?: return@let
+                    context.contentResolver.openOutputStream(it)?.use { stream ->
+                        stream.write(bytes)
+                    }
+                }
+            }
+            val coroutineScope = rememberCoroutineScope()
+
+            loadedBookState?.let { bookState ->
+                PhotobookEditorScreen(
+                    bookState = bookState,
+                    onUpdateState = { loadedBookState = it },
+                    onBack = { navController.popBackStack() },
+                    onSave = {
+                        val currentState = loadedBookState
+                        if (currentState != null) {
+                            coroutineScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    currentState.pages.forEach { page ->
+                                        deps.photobookRepository.savePageLayout(
+                                            PageLayoutEntity(
+                                                photobookId = currentState.photobook.id,
+                                                pageNumber = page.pageNumber,
+                                                elementsJson = ElementSerializer.serialize(page.elements),
+                                                mode = currentState.mode.name
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    onExportPdf = {
+                        pdfBytesState.value = PdfExportUtil.exportPdf(context, bookState)
+                        createPdf.launch("photobook.pdf")
+                    },
+                    onUndo = { /* MVP: no-op */ }
+                )
+            } ?: run {
+                androidx.compose.material3.Text("Loading...")
+            }
         }
     }
 }

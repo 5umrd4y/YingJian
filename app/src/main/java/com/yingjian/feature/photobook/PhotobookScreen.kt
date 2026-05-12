@@ -6,10 +6,12 @@ import com.yingjian.feature.photobook.model.PaperSize
 @Composable
 fun PhotobookScreen(
     viewModel: PhotobookViewModel,
-    onNavigateToPhotoPicker: (PaperSize) -> Unit = {}
+    onNavigateToPhotoPicker: (PaperSize) -> Unit = {},
+    onNavigateToEditor: (Long) -> Unit = {}
 ) {
     PhotobookListScreen(
         viewModel = viewModel,
-        onNavigateToPhotoPicker = onNavigateToPhotoPicker
+        onNavigateToPhotoPicker = onNavigateToPhotoPicker,
+        onNavigateToEditor = onNavigateToEditor
     )
 }
