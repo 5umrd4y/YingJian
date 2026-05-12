@@ -89,7 +89,7 @@ fun StorageListScreen(
                 leadingContent = { Icon(entry.icon, contentDescription = null) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showConfigSheet = entry.key }
+                    .then(if (entry.key == "local") Modifier else Modifier.clickable { showConfigSheet = entry.key })
             )
         }
     }

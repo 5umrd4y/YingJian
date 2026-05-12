@@ -4,7 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -34,7 +34,7 @@ fun YingJianBottomNavigationBar(
 ) {
     val items = listOf(
         BottomNavItem(NavDestinations.Memories, "影记", Icons.Default.PhotoLibrary),
-        BottomNavItem(NavDestinations.Photobook, "画册", Icons.Default.Collections),
+        BottomNavItem(NavDestinations.Photobook, "画册", Icons.Default.AutoStories),
         BottomNavItem(NavDestinations.Settings, "设置", Icons.Default.Settings)
     )
 
