@@ -23,6 +23,7 @@ import com.yingjian.feature.memories.MemoriesViewModel
 import com.yingjian.feature.memories.NewPostScreen
 import com.yingjian.feature.memories.MemoryDetailScreen
 import com.yingjian.feature.memories.getImageMetadata
+import com.yingjian.feature.memories.getAllImageUris
 import com.yingjian.feature.photobook.PhotoPickerScreen
 import com.yingjian.feature.photobook.PhotobookEditorScreen
 import com.yingjian.feature.photobook.PhotobookScreen
@@ -203,6 +204,63 @@ fun YingJianNavHost(
                     }
                 }
 
+                val context = LocalContext.current
+
+                // Photo picker for adding photos from detail screen
+                val pickMultipleLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(9)
+                ) { pickedUris: List<Uri> ->
+                    if (pickedUris.isNotEmpty()) {
+                        val existing = memory?.let { m -> m.getAllImageUris().map { Uri.parse(it) } } ?: emptyList()
+                        val allUris = existing + pickedUris
+                        val imageUrisJson = Json.encodeToString(
+                            ListSerializer(String.serializer()),
+                            allUris.map { it.toString() }
+                        )
+                        navHostScope.launch {
+                            withContext(Dispatchers.IO) {
+                                memory?.let { m ->
+                                    deps.memoryRepository.updateMemory(
+                                        m.copy(
+                                            imageUrisJson = imageUrisJson,
+                                            imageUri = allUris.first().toString()
+                                        )
+                                    )
+                                }
+                            }
+                            memoryRefreshTrigger++
+                            refreshTrigger++
+                        }
+                    }
+                }
+
+                val pickSingleLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+                ) { uri: Uri? ->
+                    uri?.let { pickedUri ->
+                        val existing = memory?.let { m -> m.getAllImageUris().map { Uri.parse(it) } } ?: emptyList()
+                        val allUris = existing + pickedUri
+                        val imageUrisJson = Json.encodeToString(
+                            ListSerializer(String.serializer()),
+                            allUris.map { it.toString() }
+                        )
+                        navHostScope.launch {
+                            withContext(Dispatchers.IO) {
+                                memory?.let { m ->
+                                    deps.memoryRepository.updateMemory(
+                                        m.copy(
+                                            imageUrisJson = imageUrisJson,
+                                            imageUri = allUris.first().toString()
+                                        )
+                                    )
+                                }
+                            }
+                            memoryRefreshTrigger++
+                            refreshTrigger++
+                        }
+                    }
+                }
+
                 memory?.let { memoryEntity ->
                     MemoryDetailScreen(
                         memory = memoryEntity,
@@ -224,6 +282,25 @@ fun YingJianNavHost(
                             }
                             navController.popBackStack()
                             refreshTrigger++
+                        },
+                        onAddPhotos = { _ ->
+                            val currentCount = memoryEntity.getAllImageUris().size
+                            val maxPick = 9 - currentCount
+                            if (maxPick > 0) {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    pickMultipleLauncher.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                                        )
+                                    )
+                                } else {
+                                    pickSingleLauncher.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                                        )
+                                    )
+                                }
+                            }
                         }
                     )
                 } ?: run {

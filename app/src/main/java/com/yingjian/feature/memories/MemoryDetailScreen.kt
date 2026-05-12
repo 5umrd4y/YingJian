@@ -65,7 +65,8 @@ fun MemoryDetailScreen(
     memory: MemoryRecordEntity,
     onBack: () -> Unit,
     onUpdate: (MemoryRecordEntity) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onAddPhotos: (List<Uri>) -> Unit = {}
 ) {
     val allImageUris = remember(memory.imageUrisJson) { memory.getAllImageUris() }
     val urisAsUri = allImageUris.map { Uri.parse(it) }
@@ -216,6 +217,11 @@ fun MemoryDetailScreen(
     if (showEditSheet) {
         MemoryDetailEditSheet(
             totalPhotos = urisAsUri.size,
+            onAddPhotos = {
+                showEditSheet = false
+                // Launch photo picker from caller side
+                onAddPhotos(allImageUris.map { Uri.parse(it) })
+            },
             onDeleteCurrentPhoto = {
                 showEditSheet = false
                 val remaining = allImageUris.toMutableList().apply {
@@ -267,6 +273,7 @@ fun MemoryDetailScreen(
 @Composable
 private fun MemoryDetailEditSheet(
     totalPhotos: Int,
+    onAddPhotos: () -> Unit,
     onDeleteCurrentPhoto: () -> Unit,
     onDeleteEntireMemory: () -> Unit,
     onDismiss: () -> Unit
@@ -288,13 +295,25 @@ private fun MemoryDetailEditSheet(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Note: "添加照片" is handled by returning to select again
-            Text(
-                "要添加照片，请返回后重新选择",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+            // Add photos button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onAddPhotos() }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 16.dp),
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "添加照片",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
 
             // Delete current photo (only if more than 1 photo)
             if (totalPhotos > 1) {
