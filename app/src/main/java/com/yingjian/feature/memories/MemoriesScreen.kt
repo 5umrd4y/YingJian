@@ -1,42 +1,44 @@
 package com.yingjian.feature.memories
 
 import android.content.Context
-import android.media.ExifInterface
-import android.provider.MediaStore
 import android.graphics.BitmapFactory
+import android.media.ExifInterface
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoriesScreen(
     viewModel: MemoriesViewModel,
     onNavigateToNewPost: (Uri) -> Unit
 ) {
     val context = LocalContext.current
-    val selectedTab = rememberSaveable { mutableIntStateOf(0) }
+    var showCalendar by rememberSaveable { mutableStateOf(false) }
 
     // Photo picker: after picking, navigate to NewPostScreen
     val pickMedia = rememberLauncherForActivityResult(
@@ -46,6 +48,19 @@ fun MemoriesScreen(
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("影记") },
+                actions = {
+                    IconButton(onClick = { showCalendar = !showCalendar }) {
+                        Icon(
+                            imageVector = if (showCalendar) Icons.Default.ViewAgenda else Icons.Default.CalendarMonth,
+                            contentDescription = if (showCalendar) "切换时光轴" else "切换日历"
+                        )
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
@@ -64,23 +79,10 @@ fun MemoriesScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            TabRow(selectedTabIndex = selectedTab.intValue) {
-                Tab(
-                    selected = selectedTab.intValue == 0,
-                    onClick = { selectedTab.intValue = 0 }
-                ) {
-                    Text("时光轴", modifier = Modifier.padding(16.dp))
-                }
-                Tab(
-                    selected = selectedTab.intValue == 1,
-                    onClick = { selectedTab.intValue = 1 }
-                ) {
-                    Text("日历", modifier = Modifier.padding(16.dp))
-                }
-            }
-            when (selectedTab.intValue) {
-                0 -> TimelineView(memories = viewModel.uiState.memories)
-                1 -> CalendarView(memories = viewModel.uiState.memories)
+            if (showCalendar) {
+                CalendarView(memories = viewModel.uiState.memories)
+            } else {
+                TimelineView(memories = viewModel.uiState.memories)
             }
         }
     }
@@ -118,7 +120,6 @@ fun getImageMetadata(context: Context, uri: Uri): Triple<Int, Int, Long> {
                 dateTakenMs = System.currentTimeMillis()
             }
         } else {
-            // Fallback to MediaStore DATE_MODIFIED
             context.contentResolver.query(
                 uri,
                 arrayOf(MediaStore.MediaColumns.DATE_MODIFIED),
