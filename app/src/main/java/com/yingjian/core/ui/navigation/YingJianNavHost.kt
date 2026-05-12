@@ -7,8 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,7 +20,7 @@ import com.yingjian.AppDependencies
 import com.yingjian.feature.memories.MemoriesScreen
 import com.yingjian.feature.memories.MemoriesViewModel
 import com.yingjian.feature.memories.NewPostScreen
-import com.yingjian.feature.memories.getImageDimensions
+import com.yingjian.feature.memories.getImageMetadata
 import com.yingjian.feature.photobook.PhotoPickerScreen
 import com.yingjian.feature.photobook.PhotobookEditorScreen
 import com.yingjian.feature.photobook.PhotobookScreen
@@ -36,6 +36,9 @@ import com.yingjian.core.util.ElementSerializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 @Composable
 fun YingJianNavHost(
@@ -44,6 +47,10 @@ fun YingJianNavHost(
     startDestination: String = NavDestinations.Memories.route,
     deps: AppDependencies
 ) {
+    // Shared trigger to refresh Memories list after a new post is published
+    var refreshTrigger by remember { mutableStateOf(0) }
+    val navHostScope = rememberCoroutineScope()
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -52,11 +59,16 @@ fun YingJianNavHost(
         composable(NavDestinations.Memories.route) {
             val factory = MemoriesViewModel.factory(deps.memoryRepository)
             val viewModel: MemoriesViewModel = viewModel(factory = factory)
+
+            // Refresh memories when triggered by new post publish
+            LaunchedEffect(refreshTrigger) {
+                viewModel.dispatch(com.yingjian.feature.memories.MemoriesAction.Load)
+            }
+
             MemoriesScreen(
                 viewModel = viewModel,
                 onNavigateToNewPost = { uri ->
-                    navController.currentBackStackEntry?.savedStateHandle?.set("imageUri", uri.toString())
-                    navController.navigate(NavDestinations.NewPost.route)
+                    navController.navigate(NavDestinations.NewPost.createRoute(uri))
                 }
             )
         }
@@ -105,20 +117,33 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
-            val uri = backStackEntry.savedStateHandle.get<String>("imageUri")?.let { Uri.parse(it) }
+            val encodedUri = backStackEntry.arguments?.getString("encodedUri")
+            val uri = encodedUri?.let { Uri.decode(it) }?.let { Uri.parse(it) }
             if (uri != null) {
-                val factory = MemoriesViewModel.factory(deps.memoryRepository)
-                val viewModel: MemoriesViewModel = viewModel(factory = factory)
                 val context = LocalContext.current
                 NewPostScreen(
                     imageUri = uri,
                     onPublish = { mood, tags ->
-                        val dims = getImageDimensions(context, uri)
-                        viewModel.dispatch(
-                            com.yingjian.feature.memories.MemoriesAction.Add(
-                                uri, mood, tags, dims.first, dims.second
-                            )
-                        )
+                        val metadata = getImageMetadata(context, uri)
+                        // Insert directly via repository
+                        kotlinx.coroutines.runBlocking {
+                            withContext(Dispatchers.IO) {
+                                deps.memoryRepository.insertMemory(
+                                    com.yingjian.core.data.database.MemoryRecordEntity(
+                                        imageUri = uri.toString(),
+                                        imageWidth = metadata.first,
+                                        imageHeight = metadata.second,
+                                        timestamp = metadata.third,
+                                        latitude = null,
+                                        longitude = null,
+                                        moodText = mood.takeIf { it.isNotBlank() },
+                                        tags = Json.encodeToString(ListSerializer(String.serializer()), tags),
+                                        createdAt = System.currentTimeMillis()
+                                    )
+                                )
+                            }
+                        }
+                        refreshTrigger++
                         navController.popBackStack()
                     },
                     onBack = { navController.popBackStack() }

@@ -1,6 +1,8 @@
 package com.yingjian.feature.memories
 
 import android.content.Context
+import android.media.ExifInterface
+import android.provider.MediaStore
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -85,13 +87,52 @@ fun MemoriesScreen(
 }
 
 /**
- * Get image dimensions from a content URI.
+ * Get image metadata (width, height, dateTakenMs) from a content URI.
+ * Uses ExifInterface for date extraction with fallback chain:
+ * TAG_DATETIME_ORIGINAL > TAG_DATETIME > MediaStore DATE_MODIFIED > currentTime
  */
-fun getImageDimensions(context: Context, uri: Uri): Pair<Int, Int> {
+fun getImageMetadata(context: Context, uri: Uri): Triple<Int, Int, Long> {
+    var width = 0
+    var height = 0
+    var dateTakenMs = System.currentTimeMillis()
+
     context.contentResolver.openInputStream(uri)?.use { stream ->
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeStream(stream, null, options)
-        return options.outWidth to options.outHeight
+        width = options.outWidth
+        height = options.outHeight
     }
-    return 0 to 0
+
+    context.contentResolver.openInputStream(uri)?.use { stream ->
+        val exif = ExifInterface(stream)
+        val dateTimeOriginal = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+        val dateTime = exif.getAttribute(ExifInterface.TAG_DATETIME)
+
+        val rawDate = dateTimeOriginal ?: dateTime
+        if (rawDate != null) {
+            kotlin.runCatching {
+                val format = java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.getDefault())
+                format.timeZone = java.util.TimeZone.getDefault()
+                dateTakenMs = format.parse(rawDate)?.time ?: System.currentTimeMillis()
+            }.onFailure {
+                dateTakenMs = System.currentTimeMillis()
+            }
+        } else {
+            // Fallback to MediaStore DATE_MODIFIED
+            context.contentResolver.query(
+                uri,
+                arrayOf(MediaStore.MediaColumns.DATE_MODIFIED),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val modifiedSec = cursor.getLong(0)
+                    dateTakenMs = modifiedSec * 1000
+                }
+            }
+        }
+    }
+
+    return Triple(width, height, dateTakenMs)
 }
