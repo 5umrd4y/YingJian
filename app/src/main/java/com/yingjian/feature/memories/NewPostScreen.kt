@@ -39,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -216,24 +217,19 @@ fun NewPostScreen(
                 }
             )
 
-            // Tag chips
+            // Tag chips with add button
             Text(
                 "标签",
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
             )
-            LazyRow {
-                items(defaultChips) { chip ->
-                    FilterChip(
-                        selected = tags.contains(chip),
-                        onClick = {
-                            if (tags.contains(chip)) tags.remove(chip) else tags.add(chip)
-                        },
-                        label = { Text(chip) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+            TagChips(
+                tags = tags,
+                defaultChips = defaultChips,
+                onToggleTag = { chip ->
+                    if (tags.contains(chip)) tags.remove(chip) else tags.add(chip)
                 }
-            }
+            )
         }
     }
 }
@@ -309,6 +305,117 @@ private fun AddPhotoButton(
             style = MaterialTheme.typography.labelSmall,
             color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+        )
+    }
+}
+
+@Composable
+private fun TagChips(
+    tags: List<String>,
+    defaultChips: List<String>,
+    onToggleTag: (String) -> Unit
+) {
+    var showAddDialog by rememberSaveable { mutableStateOf(false) }
+    var newTagInput by remember { mutableStateOf("") }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(defaultChips) { chip ->
+                FilterChip(
+                    selected = tags.contains(chip),
+                    onClick = { onToggleTag(chip) },
+                    label = { Text(chip) }
+                )
+            }
+            // Custom tags that are not in default chips
+            items(tags.filter { it !in defaultChips }) { chip ->
+                FilterChip(
+                    selected = true,
+                    onClick = { onToggleTag(chip) },
+                    label = { Text(chip) }
+                )
+            }
+        }
+        // Add tag button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .border(
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    RoundedCornerShape(16.dp)
+                )
+                .clickable { showAddDialog = true }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "添加标签",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    // Add tag dialog
+    if (showAddDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("添加标签") },
+            text = {
+                BasicTextField(
+                    value = newTagInput,
+                    onValueChange = { newTagInput = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    decorationBox = { innerTextField ->
+                        if (newTagInput.isEmpty()) {
+                            Text(
+                                "输入标签...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val tag = newTagInput.trim().takeIf { it.isNotBlank() }
+                    if (tag != null && tag !in tags) {
+                        onToggleTag(tag)
+                    }
+                    newTagInput = ""
+                    showAddDialog = false
+                }) {
+                    Text("添加")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    newTagInput = ""
+                    showAddDialog = false
+                }) {
+                    Text("取消")
+                }
+            }
         )
     }
 }
