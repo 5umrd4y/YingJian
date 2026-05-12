@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -165,17 +166,22 @@ private fun CalendarDayCell(
         val shape = RoundedCornerShape(8.dp)
 
         if (hasPhotos) {
-            // Photo cell: thumbnail fills background, date centered on top with scrim
+            // Photo cell: thumbnail background with bottom gradient + date in bottom-right
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(shape)
                     .shadow(2.dp, shape)
+                    .border(
+                        width = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        shape = shape
+                    )
                     .clickable {
                         dayInfo.memories.firstOrNull()?.let { onMemoryClick(it) }
                     }
             ) {
-                // Background: thumbnail
+                // Background: thumbnail fills cell
                 AsyncImage(
                     model = android.net.Uri.parse(dayInfo.memories.first().imageUri),
                     contentDescription = null,
@@ -183,23 +189,30 @@ private fun CalendarDayCell(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Foreground: date overlay centered with scrim background
+                // Bottom gradient overlay for date readability
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = dayInfo.day.toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        modifier = Modifier
-                            .background(
-                                Color.Black.copy(alpha = 0.4f),
-                                RoundedCornerShape(4.dp)
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.4f)
+                                ),
+                                startY = 0.5f
                             )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
+                        )
+                )
+
+                // Date in bottom-right corner, white text
+                Text(
+                    text = dayInfo.day.toString(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 6.dp, bottom = 4.dp)
+                )
             }
         } else {
             // Empty day: surface background, centered date, subtle border
