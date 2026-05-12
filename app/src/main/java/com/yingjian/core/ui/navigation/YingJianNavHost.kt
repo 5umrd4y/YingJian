@@ -91,6 +91,8 @@ fun YingJianNavHost(
                         ListSerializer(Long.serializer()),
                         dates
                     )
+                    android.util.Log.d("NavDebug", "WRITING: urisJson length=${urisJson.length}, datesJson length=${datesJson.length}, count=${uris.size}")
+                    android.util.Log.d("NavDebug", "WRITING: urisJson=${urisJson.take(100)}")
                     navController.currentBackStackEntry?.savedStateHandle?.apply {
                         set("newPostUris", urisJson)
                         set("newPostDates", datesJson)
@@ -145,32 +147,33 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
-            // Read from the previous back stack entry's savedStateHandle
-            // (which is where MemoriesScreen set the data before navigating)
-            val urisJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostUris")
-            val datesJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostDates")
+            val (uris, imageUrisJson, dates) = remember {
+                val urisJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostUris")
+                val datesJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostDates")
 
-            val uriStrings = urisJsonStr?.let {
-                runCatching {
-                    Json.decodeFromString<List<String>>(it)
-                }.getOrNull()
-            } ?: emptyList()
-            val dates = datesJsonStr?.let {
-                runCatching {
-                    Json.decodeFromString<List<Long>>(it)
-                }.getOrNull()
-            } ?: emptyList()
-            val uris = uriStrings.map { Uri.parse(it) }
+                android.util.Log.d("NavDebug", "READING: urisJsonStr=${urisJsonStr?.take(100)}")
+                android.util.Log.d("NavDebug", "READING: datesJsonStr=${datesJsonStr?.take(50)}")
 
-            // Clean up savedStateHandle after reading
-            navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostUris")
-            navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostDates")
+                val uriStrings = urisJsonStr?.let {
+                    runCatching { Json.decodeFromString<List<String>>(it) }.getOrNull()
+                } ?: emptyList()
+                val datesList = datesJsonStr?.let {
+                    runCatching { Json.decodeFromString<List<Long>>(it) }.getOrNull()
+                } ?: emptyList()
+                val parsedUris = uriStrings.map { Uri.parse(it) }
+                android.util.Log.d("NavDebug", "PARSED: uris count=${uriStrings.size}, dates count=${datesList.size}")
+
+                navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostUris")
+                navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostDates")
+
+                Triple(
+                    parsedUris,
+                    urisJsonStr ?: "[]",
+                    datesList
+                )
+            }
 
             if (uris.isNotEmpty() && dates.isNotEmpty()) {
-                val imageUrisJson = Json.encodeToString(
-                    ListSerializer(String.serializer()),
-                    uris.map { it.toString() }
-                )
                 val firstMetadata = getImageMetadata(LocalContext.current, uris.first())
 
                 NewPostScreen(

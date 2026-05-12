@@ -47,6 +47,7 @@ fun MemoriesScreen(
     val pickMultipleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(9)
     ) { uris: List<Uri> ->
+        android.util.Log.d("NavDebug", "LAUNCHER: pickMultiple returned ${uris.size} URIs")
         val dates = uris.map { uri -> getImageMetadata(context, uri).third }
         onNavigateToNewPost(uris, dates)
     }
@@ -54,6 +55,7 @@ fun MemoriesScreen(
     val pickSingleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
+        android.util.Log.d("NavDebug", "LAUNCHER: pickSingle returned uri=$uri")
         uri?.let { pickedUri ->
             val (_, _, dateMs) = getImageMetadata(context, pickedUri)
             onNavigateToNewPost(listOf(pickedUri), listOf(dateMs))
