@@ -34,6 +34,7 @@ import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
 import com.yingjian.feature.settings.SettingsScreen
+import com.yingjian.feature.settings.AboutScreen
 import com.yingjian.core.data.database.MemoryRecordEntity
 import com.yingjian.core.data.database.PageLayoutEntity
 import com.yingjian.core.util.ElementSerializer
@@ -142,7 +143,13 @@ fun YingJianNavHost(
         }
         composable(NavDestinations.Settings.route) {
             SettingsScreen(
-                localStorageProvider = deps.localStorageProvider
+                localStorageProvider = deps.localStorageProvider,
+                onNavigateToAbout = { navController.navigate(NavDestinations.About.route) }
+            )
+        }
+        composable(NavDestinations.About.route) {
+            AboutScreen(
+                onBack = { navController.popBackStack() }
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->

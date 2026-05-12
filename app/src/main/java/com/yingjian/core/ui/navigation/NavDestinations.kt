@@ -4,6 +4,7 @@ sealed class NavDestinations(val route: String) {
     data object Memories : NavDestinations("memories")
     data object Photobook : NavDestinations("photobook")
     data object Settings : NavDestinations("settings")
+    data object About : NavDestinations("about")
     // Route has no parameters — URIs/dates passed via savedStateHandle
     data object NewPost : NavDestinations("new_post")
     data object MemoryDetail : NavDestinations("memory_detail/{memoryId}") {

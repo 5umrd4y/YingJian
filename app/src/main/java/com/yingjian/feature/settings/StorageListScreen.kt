@@ -1,6 +1,7 @@
 package com.yingjian.feature.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -35,7 +37,8 @@ data class StorageEntry(
 @Composable
 fun StorageListScreen(
     modifier: Modifier = Modifier,
-    localStorageProvider: StorageProvider
+    localStorageProvider: StorageProvider,
+    onNavigateToAbout: () -> Unit = {}
 ) {
     var showConfigSheet by remember { mutableStateOf<String?>(null) }
 
@@ -90,6 +93,24 @@ fun StorageListScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(if (entry.key == "local") Modifier else Modifier.clickable { showConfigSheet = entry.key })
+            )
+        }
+
+        item { Spacer(modifier = Modifier.padding(vertical = 24.dp)) }
+
+        // "关于" button
+        item {
+            ListItem(
+                headlineContent = { Text("关于") },
+                leadingContent = {
+                    Icon(
+                        androidx.compose.material.icons.Icons.Default.Info,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToAbout() }
             )
         }
     }

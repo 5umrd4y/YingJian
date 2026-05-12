@@ -7,12 +7,14 @@ import com.yingjian.core.data.repository.StorageProvider
 
 @androidx.compose.runtime.Composable
 fun SettingsScreen(
-    localStorageProvider: StorageProvider
+    localStorageProvider: StorageProvider,
+    onNavigateToAbout: () -> Unit = {}
 ) {
     Scaffold { paddingValues ->
         StorageListScreen(
             modifier = Modifier.padding(paddingValues),
-            localStorageProvider = localStorageProvider
+            localStorageProvider = localStorageProvider,
+            onNavigateToAbout = onNavigateToAbout
         )
     }
 }
