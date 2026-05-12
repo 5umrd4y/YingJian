@@ -123,8 +123,8 @@ fun YingJianNavHost(
                 val context = LocalContext.current
                 val metadata = getImageMetadata(context, uri)
                 NewPostScreen(
-                    imageUri = uri,
-                    dateTaken = metadata.third,
+                    imageUris = listOf(uri),
+                    datesTaken = listOf(metadata.third),
                     onPublish = { mood, tags ->
                         // Insert directly via repository
                         kotlinx.coroutines.runBlocking {
