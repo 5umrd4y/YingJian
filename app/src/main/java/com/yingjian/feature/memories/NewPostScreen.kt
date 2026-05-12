@@ -205,15 +205,21 @@ fun NewPostScreen(
                     .fillMaxWidth()
                     .height(100.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .padding(12.dp),
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest),
                 decorationBox = { innerTextField ->
-                    if (moodText.isEmpty()) {
-                        Text(
-                            "记录此刻的心情...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
+                    ) {
+                        if (moodText.isEmpty()) {
+                            Text(
+                                "记录此刻的心情...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
                 }
             )
 
@@ -340,17 +346,17 @@ private fun TagChips(
         item {
             Box(
                 modifier = Modifier
+                    .height(32.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .border(
                         BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         RoundedCornerShape(16.dp)
                     )
-                    .clickable { showAddDialog = true }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .clickable { showAddDialog = true },
                 contentAlignment = Alignment.Center
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
