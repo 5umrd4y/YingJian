@@ -11,14 +11,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +43,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -217,10 +222,20 @@ fun MemoryDetailScreen(
     if (showEditSheet) {
         MemoryDetailEditSheet(
             totalPhotos = urisAsUri.size,
+            moodText = memory.moodText,
+            tags = tags,
             onAddPhotos = {
                 showEditSheet = false
-                // Launch photo picker from caller side
                 onAddPhotos(allImageUris.map { Uri.parse(it) })
+            },
+            onEditMoodTags = { newMood, newTags ->
+                showEditSheet = false
+                onUpdate(
+                    memory.copy(
+                        moodText = newMood.takeIf { it.isNotBlank() },
+                        tags = Json.encodeToString(ListSerializer(String.serializer()), newTags)
+                    )
+                )
             },
             onDeleteCurrentPhoto = {
                 showEditSheet = false
@@ -273,54 +288,107 @@ fun MemoryDetailScreen(
 @Composable
 private fun MemoryDetailEditSheet(
     totalPhotos: Int,
+    moodText: String?,
+    tags: List<String>,
     onAddPhotos: () -> Unit,
+    onEditMoodTags: (String, List<String>) -> Unit,
     onDeleteCurrentPhoto: () -> Unit,
     onDeleteEntireMemory: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showMoodEdit by rememberSaveable { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            Text(
-                "编辑影记",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
+        if (showMoodEdit) {
+            MemoryDetailMoodEditSheet(
+                initialMood = moodText ?: "",
+                initialTags = tags,
+                onSave = onEditMoodTags,
+                onDismiss = { showMoodEdit = false }
             )
-
-            // Add photos button
-            Row(
+        } else {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onAddPhotos() }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 16.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
                 Text(
-                    "添加照片",
-                    style = MaterialTheme.typography.bodyLarge
+                    "编辑影记",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
-            }
 
-            // Delete current photo (only if more than 1 photo)
-            if (totalPhotos > 1) {
+                // Edit mood & tags
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onDeleteCurrentPhoto() }
+                        .clickable { showMoodEdit = true }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "编辑心情和标签",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                // Add photos button
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onAddPhotos() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "添加照片",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                // Delete current photo (only if more than 1 photo)
+                if (totalPhotos > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onDeleteCurrentPhoto() }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            "删除此照片",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                // Delete entire memory
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onDeleteEntireMemory() }
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -331,30 +399,94 @@ private fun MemoryDetailEditSheet(
                         tint = MaterialTheme.colorScheme.error
                     )
                     Text(
-                        "删除此照片",
+                        "删除整条影记",
                         color = MaterialTheme.colorScheme.error
                     )
                 }
             }
+        }
+    }
+}
 
-            // Delete entire memory
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MemoryDetailMoodEditSheet(
+    initialMood: String,
+    initialTags: List<String>,
+    onSave: (String, List<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var mood by remember { mutableStateOf(initialMood) }
+    val tags = remember { mutableStateListOf(*initialTags.toTypedArray()) }
+    val defaultChips = listOf("#Life", "#Mood", "#Daily", "#Inspiration")
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onDeleteEntireMemory() }
-                    .padding(vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 16.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
                 Text(
-                    "删除整条影记",
-                    color = MaterialTheme.colorScheme.error
+                    "编辑心情和标签",
+                    style = MaterialTheme.typography.titleLarge
                 )
+                TextButton(onClick = { onSave(mood, tags.toList()) }) {
+                    Text("保存")
+                }
+            }
+
+            // Mood text input
+            Text(
+                "此刻心情",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+            )
+            BasicTextField(
+                value = mood,
+                onValueChange = { mood = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .padding(12.dp),
+                decorationBox = { innerTextField ->
+                    if (mood.isEmpty()) {
+                        Text(
+                            "记录此刻的心情...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+
+            // Tag chips
+            Text(
+                "标签",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(defaultChips) { chip ->
+                    FilterChip(
+                        selected = tags.contains(chip),
+                        onClick = {
+                            if (tags.contains(chip)) tags.remove(chip) else tags.add(chip)
+                        },
+                        label = { Text(chip) }
+                    )
+                }
             }
         }
     }
