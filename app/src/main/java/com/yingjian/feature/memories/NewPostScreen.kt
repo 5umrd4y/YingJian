@@ -318,57 +318,53 @@ private fun TagChips(
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
     var newTagInput by remember { mutableStateOf("") }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(defaultChips) { chip ->
-                FilterChip(
-                    selected = tags.contains(chip),
-                    onClick = { onToggleTag(chip) },
-                    label = { Text(chip) }
-                )
-            }
-            // Custom tags that are not in default chips
-            items(tags.filter { it !in defaultChips }) { chip ->
-                FilterChip(
-                    selected = true,
-                    onClick = { onToggleTag(chip) },
-                    label = { Text(chip) }
-                )
-            }
+        items(defaultChips) { chip ->
+            FilterChip(
+                selected = tags.contains(chip),
+                onClick = { onToggleTag(chip) },
+                label = { Text(chip) }
+            )
+        }
+        // Custom tags that are not in default chips
+        items(tags.filter { it !in defaultChips }) { chip ->
+            FilterChip(
+                selected = true,
+                onClick = { onToggleTag(chip) },
+                label = { Text(chip) }
+            )
         }
         // Add tag button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .border(
-                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    RoundedCornerShape(16.dp)
-                )
-                .clickable { showAddDialog = true }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
+        item {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .border(
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .clickable { showAddDialog = true }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "添加标签",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "添加",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
