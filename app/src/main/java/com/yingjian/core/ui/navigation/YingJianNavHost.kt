@@ -430,13 +430,12 @@ fun YingJianNavHost(
 private fun rememberLoadedMemories(
     repository: com.yingjian.core.data.repository.MemoryRepository
 ): List<com.yingjian.core.data.database.MemoryRecordEntity> {
-    var memories by mutableStateOf(
-        emptyList<com.yingjian.core.data.database.MemoryRecordEntity>()
-    )
-
-    LaunchedEffect(repository) {
-        withContext(Dispatchers.IO) {
-            memories = repository.getAllMemories()
+    val memories by produceState<List<com.yingjian.core.data.database.MemoryRecordEntity>>(
+        initialValue = emptyList(),
+        key1 = repository
+    ) {
+        value = withContext(Dispatchers.IO) {
+            repository.getAllMemories()
         }
     }
 
