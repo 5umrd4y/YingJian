@@ -3,7 +3,9 @@ package com.yingjian.feature.memories
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -11,11 +13,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,7 +42,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.yingjian.core.data.database.MemoryRecordEntity
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 data class CalendarDayInfo(val day: Int, val memories: List<MemoryRecordEntity>)
 
@@ -80,7 +90,38 @@ fun CalendarView(
         cal.get(Calendar.YEAR) == year && (cal.get(Calendar.MONTH) + 1) == month
     }
 
-    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+    // Timeline days for current month — grouped by day, used for both calendar grid and timeline feed
+    val timelineDays = remember(monthMemories) {
+        monthMemories.groupBy { memory ->
+            val cal = Calendar.getInstance().apply { timeInMillis = memory.timestamp }
+            cal.get(Calendar.DAY_OF_MONTH)
+        }.filterValues { it.isNotEmpty() }
+            .mapKeys { (day, _) -> day }
+            .entries
+            .sortedByDescending { (day, _) -> day }
+            .map { (day, dayMemories) ->
+                CalendarDayInfo(day, dayMemories.sortedByDescending { it.timestamp })
+            }
+    }
+
+    // LazyListState for scrolling to selected day
+    val listState = remember { LazyListState() }
+    val scope = rememberCoroutineScope()
+
+    // Mapping: day number -> item index in LazyColumn (calendar items + spacer + one per timeline day)
+    // Items: 0 = month selector, 1 = weekday header, 2 = calendar grid, 3 = spacer, 4+ = timeline days
+    val dayToItemIndex = remember(timelineDays) {
+        timelineDays.mapIndexed { index, dayInfo ->
+            dayInfo.day to (4 + index)
+        }.toMap()
+    }
+
+    val dateFormatter = remember { SimpleDateFormat("M月d日", Locale.getDefault()) }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxWidth()
+    ) {
         // Month selector header with navigation arrows
         item {
             Row(
@@ -96,7 +137,11 @@ fun CalendarView(
                 )
                 Row {
                     IconButton(
-                        onClick = { if (currentMonthIndex < availableMonths.size - 1) currentMonthIndex++ },
+                        onClick = {
+                            if (currentMonthIndex < availableMonths.size - 1) {
+                                currentMonthIndex++
+                            }
+                        },
                         enabled = currentMonthIndex < availableMonths.size - 1
                     ) {
                         Icon(
@@ -131,18 +176,134 @@ fun CalendarView(
             }
         }
 
-        // Calendar grid
-        val calendarDays = generateCalendarDays(month, year, monthMemories)
-        val weekChunks = calendarDays.chunked(7)
-        items(items = weekChunks) { weekDays ->
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                weekDays.forEach { dayInfo ->
-                    CalendarDayCell(dayInfo = dayInfo, modifier = Modifier.weight(1f), onMemoryClick = onMemoryClick)
+        // Calendar grid — all weeks rendered in a single Column item
+        item {
+            val calendarDays = generateCalendarDays(month, year, monthMemories)
+            val weekChunks = calendarDays.chunked(7)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                weekChunks.forEach { weekDays ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        weekDays.forEach { dayInfo ->
+                            CalendarDayCell(
+                                dayInfo = dayInfo,
+                                modifier = Modifier.weight(1f),
+                                onDayClick = { day ->
+                                    // Scroll to this day's timeline section
+                                    dayToItemIndex[day]?.let { itemIndex ->
+                                        scope.launch {
+                                            listState.animateScrollToItem(itemIndex)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
 
+        // Spacer before timeline feed
+        item { Spacer(modifier = Modifier.padding(8.dp)) }
+
+        // Timeline feed — one LazyColumn item per day
+        items(
+            items = timelineDays,
+            key = { it.day }
+        ) { dayInfo ->
+            CalendarTimelineDaySection(
+                day = dayInfo.day,
+                year = year,
+                month = month,
+                memories = dayInfo.memories,
+                dateFormatter = dateFormatter,
+                onMemoryClick = onMemoryClick
+            )
+        }
+
         item { Spacer(modifier = Modifier.padding(16.dp)) }
+    }
+}
+
+/**
+ * Timeline section for a single day — date label + ink divider + memory cards
+ */
+@Composable
+private fun CalendarTimelineDaySection(
+    day: Int,
+    year: Int,
+    month: Int,
+    memories: List<MemoryRecordEntity>,
+    dateFormatter: SimpleDateFormat,
+    onMemoryClick: (MemoryRecordEntity) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        // Day label: "3月10日"
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${month}月${day}日",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Divider(
+                modifier = Modifier.weight(1f).padding(start = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            )
+        }
+
+        // Memory cards in 2-column layout
+        memories.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { memory ->
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onMemoryClick(memory) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                        )
+                    ) {
+                        Column {
+                            AsyncImage(
+                                model = android.net.Uri.parse(memory.imageUri),
+                                contentDescription = memory.moodText,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                            )
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text(
+                                    dateFormatter.format(memory.timestamp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (!memory.moodText.isNullOrBlank()) {
+                                    Text(
+                                        memory.moodText,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fill empty slot if odd count
+                if (rowItems.size == 1) {
+                    Box(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -150,7 +311,7 @@ fun CalendarView(
 private fun CalendarDayCell(
     dayInfo: CalendarDayInfo?,
     modifier: Modifier = Modifier,
-    onMemoryClick: (MemoryRecordEntity) -> Unit = {}
+    onDayClick: (Int) -> Unit = {}
 ) {
     Box(
         modifier = modifier
@@ -158,7 +319,7 @@ private fun CalendarDayCell(
             .padding(2.dp)
     ) {
         if (dayInfo == null) {
-            // Empty day cell — blank spacer, matching design reference
+            // Empty day cell — blank spacer
             return
         }
 
@@ -178,7 +339,7 @@ private fun CalendarDayCell(
                         shape = shape
                     )
                     .clickable {
-                        dayInfo.memories.firstOrNull()?.let { onMemoryClick(it) }
+                        onDayClick(dayInfo.day)
                     }
             ) {
                 // Background: thumbnail fills cell
