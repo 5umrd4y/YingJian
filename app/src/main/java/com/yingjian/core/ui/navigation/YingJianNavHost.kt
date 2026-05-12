@@ -30,6 +30,7 @@ import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
+import com.yingjian.feature.settings.SettingsScreen
 import com.yingjian.core.data.database.PageLayoutEntity
 import com.yingjian.core.util.ElementSerializer
 import kotlinx.coroutines.Dispatchers
@@ -99,8 +100,9 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.Settings.route) {
-            // Placeholder - will be implemented in Task 11
-            androidx.compose.material3.Text("设置")
+            SettingsScreen(
+                localStorageProvider = deps.localStorageProvider
+            )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
             val uri = backStackEntry.savedStateHandle.get<String>("imageUri")?.let { Uri.parse(it) }
