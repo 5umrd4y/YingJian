@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,6 +21,7 @@ import com.yingjian.AppDependencies
 import com.yingjian.feature.memories.MemoriesScreen
 import com.yingjian.feature.memories.MemoriesViewModel
 import com.yingjian.feature.memories.NewPostScreen
+import com.yingjian.feature.memories.MemoryDetailScreen
 import com.yingjian.feature.memories.getImageMetadata
 import com.yingjian.feature.photobook.PhotoPickerScreen
 import com.yingjian.feature.photobook.PhotobookEditorScreen
@@ -31,6 +33,7 @@ import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
 import com.yingjian.feature.settings.SettingsScreen
+import com.yingjian.core.data.database.MemoryRecordEntity
 import com.yingjian.core.data.database.PageLayoutEntity
 import com.yingjian.core.util.ElementSerializer
 import kotlinx.coroutines.Dispatchers
@@ -47,9 +50,22 @@ fun YingJianNavHost(
     startDestination: String = NavDestinations.Memories.route,
     deps: AppDependencies
 ) {
-    // Shared trigger to refresh Memories list after a new post is published
     var refreshTrigger by remember { mutableStateOf(0) }
+    var memoryRefreshTrigger by remember { mutableStateOf(0) }
+    var pendingPublish by remember { mutableStateOf<MemoryRecordEntity?>(null) }
     val navHostScope = rememberCoroutineScope()
+
+    // Handle publish via LaunchedEffect (not runBlocking)
+    LaunchedEffect(pendingPublish) {
+        pendingPublish?.let { entity ->
+            withContext(Dispatchers.IO) {
+                deps.memoryRepository.insertMemory(entity)
+            }
+            refreshTrigger++
+            pendingPublish = null
+            navController.popBackStack()
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -60,15 +76,21 @@ fun YingJianNavHost(
             val factory = MemoriesViewModel.factory(deps.memoryRepository)
             val viewModel: MemoriesViewModel = viewModel(factory = factory)
 
-            // Refresh memories when triggered by new post publish
             LaunchedEffect(refreshTrigger) {
                 viewModel.dispatch(com.yingjian.feature.memories.MemoriesAction.Load)
             }
 
             MemoriesScreen(
                 viewModel = viewModel,
-                onNavigateToNewPost = { uri ->
-                    navController.navigate(NavDestinations.NewPost.createRoute(uri))
+                onNavigateToNewPost = { uris: List<Uri>, dates: List<Long> ->
+                    navController.currentBackStackEntry?.savedStateHandle?.apply {
+                        set("newPostUris", uris.map { it.toString() })
+                        set("newPostDates", dates)
+                    }
+                    navController.navigate(NavDestinations.NewPost.route)
+                },
+                onMemoryClick = { memory ->
+                    navController.navigate(NavDestinations.MemoryDetail.createRoute(memory.id))
                 }
             )
         }
@@ -79,7 +101,6 @@ fun YingJianNavHost(
             )
             val viewModel: PhotobookViewModel = viewModel(factory = factory)
 
-            // Check if we received selected memory IDs from PhotoPicker
             val selectedIdsStr = backStackEntry.savedStateHandle.get<String>("selectedMemoryIds")
             val paperSizeStr = backStackEntry.savedStateHandle.get<String>("paperSize")
 
@@ -102,7 +123,6 @@ fun YingJianNavHost(
             PhotobookScreen(
                 viewModel = viewModel,
                 onNavigateToPhotoPicker = { paperSize ->
-                    // Store paperSize in savedStateHandle for PhotoPicker to read
                     backStackEntry.savedStateHandle.set("paperSize", paperSize.name)
                     navController.navigate(NavDestinations.PhotoPicker.route)
                 },
@@ -117,38 +137,76 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
-            val encodedUri = backStackEntry.arguments?.getString("encodedUri")
-            val uri = encodedUri?.let { Uri.decode(it) }?.let { Uri.parse(it) }
-            if (uri != null) {
-                val context = LocalContext.current
-                val metadata = getImageMetadata(context, uri)
+            val uriStrings = backStackEntry.savedStateHandle.get<List<String>>("newPostUris") ?: emptyList()
+            val dates = backStackEntry.savedStateHandle.get<List<Long>>("newPostDates") ?: emptyList()
+            val uris = uriStrings.map { Uri.parse(it) }
+
+            if (uris.isNotEmpty() && dates.isNotEmpty()) {
+                val imageUrisJson = Json.encodeToString(
+                    ListSerializer(String.serializer()),
+                    uris.map { it.toString() }
+                )
+                val firstMetadata = getImageMetadata(LocalContext.current, uris.first())
+
                 NewPostScreen(
-                    imageUris = listOf(uri),
-                    datesTaken = listOf(metadata.third),
+                    imageUris = uris,
+                    datesTaken = dates,
                     onPublish = { mood, tags ->
-                        // Insert directly via repository
-                        kotlinx.coroutines.runBlocking {
-                            withContext(Dispatchers.IO) {
-                                deps.memoryRepository.insertMemory(
-                                    com.yingjian.core.data.database.MemoryRecordEntity(
-                                        imageUri = uri.toString(),
-                                        imageWidth = metadata.first,
-                                        imageHeight = metadata.second,
-                                        timestamp = metadata.third,
-                                        latitude = null,
-                                        longitude = null,
-                                        moodText = mood.takeIf { it.isNotBlank() },
-                                        tags = Json.encodeToString(ListSerializer(String.serializer()), tags),
-                                        createdAt = System.currentTimeMillis()
-                                    )
-                                )
-                            }
-                        }
-                        refreshTrigger++
-                        navController.popBackStack()
+                        pendingPublish = MemoryRecordEntity(
+                            imageUri = uris.first().toString(),
+                            imageWidth = firstMetadata.first,
+                            imageHeight = firstMetadata.second,
+                            timestamp = dates.first(),
+                            latitude = null,
+                            longitude = null,
+                            moodText = mood.takeIf { it.isNotBlank() },
+                            tags = Json.encodeToString(ListSerializer(String.serializer()), tags),
+                            createdAt = System.currentTimeMillis(),
+                            imageUrisJson = imageUrisJson
+                        )
                     },
                     onBack = { navController.popBackStack() }
                 )
+            }
+        }
+        composable(NavDestinations.MemoryDetail.route) { backStackEntry ->
+            val memoryId = backStackEntry.arguments?.getString("memoryId")?.toLongOrNull()
+            if (memoryId != null) {
+                val memory by produceState<MemoryRecordEntity?>(
+                    initialValue = null,
+                    memoryId, memoryRefreshTrigger
+                ) {
+                    value = withContext(Dispatchers.IO) {
+                        deps.memoryRepository.getMemoryById(memoryId)
+                    }
+                }
+
+                memory?.let { memoryEntity ->
+                    MemoryDetailScreen(
+                        memory = memoryEntity,
+                        onBack = { navController.popBackStack() },
+                        onUpdate = { updatedMemory ->
+                            navHostScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    deps.memoryRepository.updateMemory(updatedMemory)
+                                }
+                                memoryRefreshTrigger++
+                            }
+                            refreshTrigger++
+                        },
+                        onDelete = {
+                            navHostScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    deps.memoryRepository.deleteMemory(memoryEntity)
+                                }
+                            }
+                            navController.popBackStack()
+                            refreshTrigger++
+                        }
+                    )
+                } ?: run {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
             }
         }
         composable(NavDestinations.PhotoPicker.route) { backStackEntry ->
@@ -158,10 +216,8 @@ fun YingJianNavHost(
                 memories = allMemories,
                 onBack = { navController.popBackStack() },
                 onComplete = { selectedIds ->
-                    // Read paperSize from PhotoPicker's savedStateHandle (set by Photobook nav)
                     val paperSize = backStackEntry.savedStateHandle.get<String>("paperSize")
 
-                    // Pass selected IDs + paperSize back to Photobook via savedStateHandle
                     navController.previousBackStackEntry?.savedStateHandle?.apply {
                         set("selectedMemoryIds", selectedIds.map { it.toString() }.joinToString(","))
                         paperSize?.let { set("paperSize", it) }
@@ -180,7 +236,6 @@ fun YingJianNavHost(
 
             val context = LocalContext.current
 
-            // Load BookState from repository
             var loadedBookState by remember { mutableStateOf<BookState?>(null) }
 
             LaunchedEffect(photobookId) {
@@ -215,7 +270,6 @@ fun YingJianNavHost(
                 }
             }
 
-            // PDF export launcher
             val pdfBytesState = remember { mutableStateOf<ByteArray?>(null) }
             val createPdf = rememberLauncherForActivityResult(
                 ActivityResultContracts.CreateDocument("application/pdf")
@@ -266,9 +320,6 @@ fun YingJianNavHost(
     }
 }
 
-/**
- * Helper composable to load all memories from the repository.
- */
 @Composable
 private fun rememberLoadedMemories(
     repository: com.yingjian.core.data.repository.MemoryRepository

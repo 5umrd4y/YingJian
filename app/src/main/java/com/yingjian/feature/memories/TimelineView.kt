@@ -1,5 +1,6 @@
 package com.yingjian.feature.memories
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +28,10 @@ import java.util.Calendar
 import java.util.Locale
 
 @Composable
-fun TimelineView(memories: List<MemoryRecordEntity>) {
+fun TimelineView(
+    memories: List<MemoryRecordEntity>,
+    onMemoryClick: (MemoryRecordEntity) -> Unit = {}
+) {
     if (memories.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxWidth(),
@@ -69,7 +73,9 @@ fun TimelineView(memories: List<MemoryRecordEntity>) {
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onMemoryClick(featured) },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
@@ -116,7 +122,9 @@ fun TimelineView(memories: List<MemoryRecordEntity>) {
                     ) {
                         rowItems.forEach { memory ->
                             Card(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onMemoryClick(memory) },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest

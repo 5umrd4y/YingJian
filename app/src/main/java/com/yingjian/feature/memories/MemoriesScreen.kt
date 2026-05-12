@@ -30,12 +30,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.yingjian.core.data.database.MemoryRecordEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoriesScreen(
     viewModel: MemoriesViewModel,
-    onNavigateToNewPost: (Uri) -> Unit
+    onNavigateToNewPost: (List<Uri>, List<Long>) -> Unit,
+    onMemoryClick: (MemoryRecordEntity) -> Unit
 ) {
     val context = LocalContext.current
     var showCalendar by rememberSaveable { mutableStateOf(false) }
@@ -44,7 +46,10 @@ fun MemoriesScreen(
     val pickMedia = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        uri?.let { onNavigateToNewPost(it) }
+        uri?.let { pickedUri ->
+            val (_, _, dateMs) = getImageMetadata(context, pickedUri)
+            onNavigateToNewPost(listOf(pickedUri), listOf(dateMs))
+        }
     }
 
     Scaffold(
@@ -80,9 +85,15 @@ fun MemoriesScreen(
                 .padding(paddingValues)
         ) {
             if (showCalendar) {
-                CalendarView(memories = viewModel.uiState.memories)
+                CalendarView(
+                    memories = viewModel.uiState.memories,
+                    onMemoryClick = onMemoryClick
+                )
             } else {
-                TimelineView(memories = viewModel.uiState.memories)
+                TimelineView(
+                    memories = viewModel.uiState.memories,
+                    onMemoryClick = onMemoryClick
+                )
             }
         }
     }
