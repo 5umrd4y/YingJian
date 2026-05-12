@@ -12,108 +12,7 @@
 
 ### Task 1: Fix Empty Photo Picker
 
-**Files:**
-- Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotoPickerScreen.kt`
-
-**Root cause**: PhotoPickerScreen receives `memories` from NavHost's `rememberLoadedMemories`, which loads from DB asynchronously. The current code has no empty/loading state handling, and the two tabs are non-functional (no actual filtering logic).
-
-- [ ] **Step 1: Simplify PhotoPickerScreen — remove unused tabs and add empty state**
-
-Replace the entire `LazyVerticalGrid` section. Remove the non-functional TabRow ("全部照片" / "按月份浏览"). Show a 3-column grid when data exists, or an empty state message when no memories.
-
-```kotlin
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PhotoPickerScreen(
-    memories: List<MemoryRecordEntity>,
-    onBack: () -> Unit,
-    onComplete: (List<Long>) -> Unit
-) {
-    val selectedIds = remember { mutableStateListOf<Long>() }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("选择照片 (${selectedIds.size})") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    if (selectedIds.isNotEmpty()) {
-                        TextButton(onClick = { onComplete(selectedIds.toList()) }) {
-                            Text("完成")
-                        }
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        if (memories.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "暂无照片",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "请先在影记中添加照片",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(1.dp)
-            ) {
-                items(memories) { memory ->
-                    val isSelected = selectedIds.contains(memory.id)
-                    PhotoGridItem(
-                        memory = memory,
-                        isSelected = isSelected,
-                        onToggle = {
-                            if (isSelected) selectedIds.remove(memory.id)
-                            else selectedIds.add(memory.id)
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-```
-
-- [ ] **Step 2: Update imports — remove unused**
-
-Remove `Tab`, `TabRow`, `mutableIntStateOf`, `Box` (keep only the one needed for FAB if keeping it, but we're removing FAB too), `mutableStateOf`, `saveable`, `Icons.Default.CheckCircle` (keep), `Icons.Default.Visibility`, `FloatingActionButton`.
-
-- [ ] **Step 3: Remove unused FAB code**
-
-Delete the entire FAB section (the "预览选中" floating button at the bottom).
-
-- [ ] **Step 4: Add TextButton import**
-
-Add `import androidx.compose.material3.TextButton` to imports.
-
-- [ ] **Step 5: Compile and verify**
-
-Run: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" && ./gradlew :app:compileDebugKotlin 2>&1 | tail -10`
-Expected: BUILD SUCCESSFUL
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add app/src/main/java/com/yingjian/feature/photobook/PhotoPickerScreen.kt
-git commit -m "fix: simplify photo picker, remove non-functional tabs, add empty state"
-```
+**Status: Already completed in prior session. Skip.**
 
 ---
 
@@ -244,18 +143,19 @@ git commit -m "feat: replace create photobook dialog with ModalBottomSheet"
 
 **Files:**
 - Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookListScreen.kt`
-- Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookScreen.kt` (update viewModel reference)
 
 **Design reference**: `/Users/haos/Project/Android/YingJian/stitch_yingjian_huace/code.html`
+- TopAppBar with "画册" title
 - 2-column grid (`GridCells.Fixed(2)`)
 - First item: "新建画册" card — dashed border, centered + icon, text below
 - Album cards: aspect ratio 3:4, frame-style image (inset 4px), rounded corners, title centered below image, subtitle with page count
 
-- [ ] **Step 1: Rewrite PhotobookListScreen content area**
+- [ ] **Step 1: Rewrite entire PhotobookListScreen**
 
-Replace the entire `Scaffold` content body. Change from `LazyColumn` of cards to a `LazyVerticalGrid` with 2 columns.
+Replace the entire file content with the new implementation:
 
 ```kotlin
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhotobookListScreen(
     viewModel: PhotobookViewModel,
@@ -264,7 +164,21 @@ fun PhotobookListScreen(
 ) {
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold { paddingValues ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "画册",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            )
+        }
+    ) { paddingValues ->
+        val hasBooks = viewModel.uiState.photobooks.isNotEmpty()
+
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier
@@ -274,7 +188,7 @@ fun PhotobookListScreen(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // "新建画册" card — first item
+            // "新建画册" card — always first item
             item {
                 CreateNewAlbumCard(onClick = { showCreateDialog = true })
             }
@@ -283,12 +197,13 @@ fun PhotobookListScreen(
             items(viewModel.uiState.photobooks) { book ->
                 AlbumCard(
                     photobook = book,
-                    onClick = { onNavigateToEditor(book.id) }
+                    onClick = { onNavigateToEditor(book.id) },
+                    onDelete = { viewModel.deletePhotobook(book) }
                 )
             }
 
-            // "到底了" end marker when list has items
-            if (viewModel.uiState.photobooks.isNotEmpty()) {
+            // "到底了" end marker
+            if (hasBooks) {
                 item(span = { GridItemSpan(2) }) {
                     Text(
                         "到底了",
@@ -297,23 +212,27 @@ fun PhotobookListScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 24.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             }
-        }
 
-        // Empty state — show when only the "新建画册" card is visible
-        if (viewModel.uiState.photobooks.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "点击 + 创建你的第一本画册",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // Empty state as a full-span item when no albums exist
+            if (!hasBooks) {
+                item(span = { GridItemSpan(2) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "点击 + 创建你的第一本画册",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }
@@ -340,9 +259,8 @@ private fun CreateNewAlbumCard(onClick: () -> Unit) {
             .aspectRatio(3f / 4f)
             .clip(RoundedCornerShape(16.dp))
             .border(
-                width = 1.dp,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                shape = RoundedCornerShape(16.dp)
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                RoundedCornerShape(16.dp)
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -375,13 +293,16 @@ private fun CreateNewAlbumCard(onClick: () -> Unit) {
 }
 ```
 
-- [ ] **Step 3: Replace PhotobookCard with AlbumCard**
+Note: The design reference uses a dashed border. Compose's `BorderStroke` does not support dashed borders natively. Use a solid border with `outlineVariant.copy(alpha = 0.6f)` as a close approximation. If a dashed border is required later, use `Canvas` with `PathEffect.dashPathEffect`.
+
+- [ ] **Step 3: Replace PhotobookCard with AlbumCard (frame-style with long-press delete)**
 
 ```kotlin
 @Composable
 private fun AlbumCard(
     photobook: PhotobookEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Column(modifier = Modifier.clickable(onClick = onClick)) {
         // Frame-style cover image
@@ -392,9 +313,8 @@ private fun AlbumCard(
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                 .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(16.dp)
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    RoundedCornerShape(16.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -406,7 +326,6 @@ private fun AlbumCard(
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
-                // Cover image from first memory in this photobook
                 // MVP: use placeholder color since we don't have a cover image yet
                 Box(
                     modifier = Modifier
@@ -424,35 +343,75 @@ private fun AlbumCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            textAlign = TextAlign.Center,
             maxLines = 1
         )
         Text(
-            text = photobook.paperSize.replace("_", " "),
+            text = "${photobook.pageCount} 页 · ${java.text.SimpleDateFormat("yyyy", java.util.Locale.getDefault()).format(photobook.updatedAt)}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
     }
 }
 ```
 
+Note: `PhotobookEntity` may not have a `pageCount` field. If it doesn't exist yet, use `"0 页"` as a placeholder until the page count feature is implemented.
+
 - [ ] **Step 4: Update imports**
 
-Remove unused imports: `ElevatedCard`, `CardDefaults`, `IconButton`, `Icons.Default.Delete`, `Row`, `Column` (keep Column for CreateNewAlbumCard and AlbumCard), `Box` (keep), `Modifier` (keep). Add: `LazyVerticalGrid`, `GridCells`, `GridItemSpan`, `CircleShape`, `BorderStroke`, `Arrangement`, `PaddingValues`, `TextAlign`, `clip`.
+Replace all imports at the top of the file with:
 
-Required new imports:
 ```kotlin
+package com.yingjian.feature.photobook
+
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.yingjian.core.data.database.PhotobookEntity
+import com.yingjian.feature.photobook.model.PaperSize
+import java.text.SimpleDateFormat
+import java.util.Locale
 ```
+
+Remove these old imports: `AlertDialog`, `CardDefaults`, `ElevatedCard`, `FloatingActionButton`, `IconButton`, `Icons.Default.Delete`, `LazyColumn`, `items` from lazy (not lazy.grid), `Row`.
 
 - [ ] **Step 5: Compile and verify**
 
@@ -463,7 +422,7 @@ Expected: BUILD SUCCESSFUL
 
 ```bash
 git add app/src/main/java/com/yingjian/feature/photobook/PhotobookListScreen.kt
-git commit -m "feat: redesign photobook list to 2-column grid with frame-style cards"
+git commit -m "feat: redesign photobook list to 2-column grid with frame-style cards and ModalBottomSheet"
 ```
 
 ---
