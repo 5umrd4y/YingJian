@@ -5,36 +5,97 @@ import com.yingjian.core.data.database.PhotobookEntity
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.ImageElement
 import com.yingjian.feature.photobook.model.LayoutMode
+import com.yingjian.feature.photobook.model.PageElement
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
+import com.yingjian.feature.photobook.model.TextElement
 
 /**
- * Auto layout algorithm for arranging photos in a photobook.
- * TODO (Task 8): Implement intelligent layout algorithm.
- * Currently provides a simple stub that places one photo per page.
+ * MVP Auto Layout: one image per page, centered fit, with mood text below.
+ *
+ * Algorithm:
+ * - For each MemoryRecord, create one page
+ * - Image: Fit Center within trim area, respecting 3mm bleed margin
+ * - Text: Fixed 8mm below image, 70% of trim width, centered
+ * - Bleed safety: image stays within trim - bleed area
  */
 object AutoLayoutAlgorithm {
+
+    private const val BLEED_MM = 3f
+    private const val TEXT_GAP_MM = 8f
+    private const val TEXT_BOTTOM_MARGIN_MM = 5f
+    private const val TEXT_WIDTH_RATIO = 0.7f
 
     fun layout(
         memories: List<MemoryRecordEntity>,
         paperSize: PaperSize,
         photobook: PhotobookEntity
     ): BookState {
+        val safeWidth = paperSize.widthMm - BLEED_MM * 2
+        val safeHeight = paperSize.heightMm - BLEED_MM * 2
+
         val pages = memories.mapIndexed { index, memory ->
+            val aspectRatio = if (memory.imageHeight > 0) {
+                memory.imageWidth.toFloat() / memory.imageHeight.toFloat()
+            } else {
+                1f
+            }
+
+            // Fit Center calculation
+            val imageWidthMm = minOf(safeWidth, safeHeight * aspectRatio)
+            val imageHeightMm = imageWidthMm / aspectRatio
+
+            // Check if height exceeds safe area and adjust
+            val (finalWidth, finalHeight) = if (imageHeightMm > safeHeight) {
+                val h = safeHeight
+                val w = h * aspectRatio
+                w to h
+            } else {
+                imageWidthMm to imageHeightMm
+            }
+
+            // Center the image in the safe area
+            val imageXMm = (paperSize.widthMm - finalWidth) / 2
+            val imageYMm = BLEED_MM + (safeHeight - finalHeight) / 2
+
+            val elements = mutableListOf<PageElement>()
+
+            elements.add(
+                ImageElement(
+                    memoryId = memory.id,
+                    imageUri = memory.imageUri,
+                    xMm = imageXMm,
+                    yMm = imageYMm,
+                    widthMm = finalWidth,
+                    heightMm = finalHeight,
+                    rotationDeg = 0f,
+                    zIndex = 0
+                )
+            )
+
+            // Add mood text below image
+            if (!memory.moodText.isNullOrBlank()) {
+                val textYMm = imageYMm + finalHeight + TEXT_GAP_MM
+                // Ensure text bottom is at least TEXT_BOTTOM_MARGIN_MM from page edge
+                val textBottom = textYMm + 6f // approximate text height in mm
+                if (textBottom <= paperSize.heightMm - TEXT_BOTTOM_MARGIN_MM) {
+                    elements.add(
+                        TextElement(
+                            text = memory.moodText,
+                            xMm = (paperSize.widthMm - paperSize.widthMm * TEXT_WIDTH_RATIO) / 2,
+                            yMm = textYMm,
+                            widthMm = paperSize.widthMm * TEXT_WIDTH_RATIO,
+                            heightMm = 10f,
+                            rotationDeg = 0f,
+                            zIndex = 1
+                        )
+                    )
+                }
+            }
+
             PageState(
                 pageNumber = index + 1,
-                elements = listOf(
-                    ImageElement(
-                        memoryId = memory.id,
-                        imageUri = memory.imageUri,
-                        xMm = 10f,
-                        yMm = 10f,
-                        widthMm = paperSize.widthMm - 20f,
-                        heightMm = paperSize.heightMm - 20f,
-                        rotationDeg = 0f,
-                        zIndex = 0
-                    )
-                ),
+                elements = elements,
                 trimWidthMm = paperSize.widthMm,
                 trimHeightMm = paperSize.heightMm
             )
