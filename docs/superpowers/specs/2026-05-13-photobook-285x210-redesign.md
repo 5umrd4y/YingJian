@@ -321,9 +321,59 @@ Tap `[+]` button:
 2. `onComplete` returns selected memory IDs
 3. For each selected memory:
    - Fetch `MemoryRecordEntity` from repository
-   - Call `AutoLayoutAlgorithm.createSinglePhotoPage(memory, paperSize)` to generate a new `PageState` with the image centered
+   - Call `AutoLayoutAlgorithm.createSinglePhotoPage(memory, paperSize, pageNumber)` to generate a new `PageState` with the image centered
    - Append to `bookState.pages`
 4. Auto-navigate to the first new page
+
+`AutoLayoutAlgorithm` needs a new method (extracted from existing `layout()` logic):
+
+```kotlin
+fun createSinglePhotoPage(
+    memory: MemoryRecordEntity,
+    paperSize: PaperSize,
+    pageNumber: Int
+): PageState {
+    val imageWidth = memory.imageWidth.toFloat()
+    val imageHeight = memory.imageHeight.toFloat()
+    // Scale image to fit within page margins, centered
+    val maxWidth = paperSize.widthMm - MARGIN_MM * 2
+    val maxHeight = paperSize.heightMm - MARGIN_MM * 2
+    // ... existing single-image layout logic from layout()
+}
+```
+
+### Page Deletion and Renumbering
+
+When deleting an image from a page, or deleting an empty page after image removal:
+
+```kotlin
+// After removing page at index from bookState.pages:
+val updatedPages = bookState.pages
+    .filterIndexed { i, _ -> i != removedIndex }
+    .mapIndexed { newIndex, page -> page.copy(pageNumber = newIndex + 1) }
+```
+
+This ensures `pageNumber` stays in sync with `PageLayoutEntity.pageNumber` when saving to database.
+
+### ViewModel Methods to Add
+
+`PhotobookViewModel` needs these new methods beyond existing CRUD:
+
+```kotlin
+// Batch delete with cascade (delete page layouts first, then photobooks)
+fun deletePhotobooks(ids: List<Long>)
+
+// Selection mode state
+fun enterSelectionMode()
+fun exitSelectionMode()
+fun toggleSelection(id: Long)
+
+// Append photos to existing book (fetches memories, creates pages, appends)
+fun appendPhotosToBook(memoryIds: List<Long>)
+
+// Set cover image URI on current photobook
+fun setCoverImage(uri: String)
+```
 
 ### Cover Photo Setting
 
@@ -335,7 +385,8 @@ Tap `[+]` button:
 
 - Icon button in TopAppBar: `Icons.Default.PictureAsPdf`
 - Uses `PdfExportUtil` to render all pages at 285x210mm
-- Pages rendered with paper texture background, images at their positioned coordinates, mood text + dates
+- Pages rendered on `#FAF9F6` background (not pure white) — update `canvas.drawColor(Color.WHITE)` to `canvas.drawColor(Color(0xFFFAF9F6))`
+- Images at their positioned coordinates, mood text + dates
 - Output: PDF file, shared via Android share sheet using `ActivityResultContracts.CreateDocument`
 
 ### Save
