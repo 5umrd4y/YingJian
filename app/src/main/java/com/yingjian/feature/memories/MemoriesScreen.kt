@@ -1,9 +1,10 @@
 package com.yingjian.feature.memories
 
+import android.net.Uri
+import android.os.Build
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.media.ExifInterface
-import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -42,8 +43,15 @@ fun MemoriesScreen(
     val context = LocalContext.current
     var showCalendar by rememberSaveable { mutableStateOf(false) }
 
-    // Photo picker: after picking, navigate to NewPostScreen
-    val pickMedia = rememberLauncherForActivityResult(
+    // Two independent launchers: multi (API 33+) and single (fallback)
+    val pickMultipleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(9)
+    ) { uris: List<Uri> ->
+        val dates = uris.map { uri -> getImageMetadata(context, uri).third }
+        onNavigateToNewPost(uris, dates)
+    }
+
+    val pickSingleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let { pickedUri ->
@@ -69,9 +77,15 @@ fun MemoriesScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    pickMedia.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        pickMultipleLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    } else {
+                        pickSingleLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
                 },
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
