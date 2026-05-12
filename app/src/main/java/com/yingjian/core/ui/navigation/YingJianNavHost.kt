@@ -121,10 +121,11 @@ fun YingJianNavHost(
             val uri = encodedUri?.let { Uri.decode(it) }?.let { Uri.parse(it) }
             if (uri != null) {
                 val context = LocalContext.current
+                val metadata = getImageMetadata(context, uri)
                 NewPostScreen(
                     imageUri = uri,
+                    dateTaken = metadata.third,
                     onPublish = { mood, tags ->
-                        val metadata = getImageMetadata(context, uri)
                         // Insert directly via repository
                         kotlinx.coroutines.runBlocking {
                             withContext(Dispatchers.IO) {

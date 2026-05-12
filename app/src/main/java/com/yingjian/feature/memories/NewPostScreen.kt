@@ -35,18 +35,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Locale
 import coil3.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewPostScreen(
     imageUri: Uri,
+    dateTaken: Long,
     onPublish: (String, List<String>) -> Unit,
     onBack: () -> Unit
 ) {
     var moodText by remember { mutableStateOf("") }
     val tags = remember { mutableStateListOf("#Life") }
     val defaultChips = listOf("#Life", "#Mood", "#Daily", "#Inspiration")
+    val dateFormatter = remember { SimpleDateFormat("yyyy年M月d日", Locale.getDefault()) }
+    val dateDisplay = remember(dateTaken) { dateFormatter.format(dateTaken) }
 
     Scaffold(
         topBar = {
@@ -81,6 +86,14 @@ fun NewPostScreen(
                     .fillMaxWidth()
                     .height(240.dp)
                     .clip(RoundedCornerShape(28.dp))
+            )
+
+            // Date display
+            Text(
+                dateDisplay,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
             )
 
             // Mood text input
