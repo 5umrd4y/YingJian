@@ -1,7 +1,8 @@
 # Photobook 285x210 Redesign Spec
 
-**Date:** 2026-05-13
-**Status:** Design approved
+**Date:** 2026-05-13  
+**Status:** Design approved (v2, post-review)  
+**Review:** `Photobook-285x210-重新设计审阅结果.md`
 
 ---
 
@@ -9,7 +10,7 @@
 
 Redesign the photobook module with three subsystems:
 - **A: Photobook List** — paper-textured 285x210 covers, selection mode, cover management
-- **B: Photobook Editor** — single page 285x210 canvas, gesture-based image editing, flip animation, PDF export
+- **B: Photobook Editor** — single page 285x210 canvas, gesture-based image editing, button-based page switching, PDF export
 - **C: Photobook Preview** — portrait single-page / landscape spread view, page flip, spine effect
 
 All design follows `DESIGN.md` specifications: Eastern Minimalism, warm paper palette, Noto Sans SC + Source Sans 3 typography, 28dp corner radius, low-contrast outlines, Ma (whitespace) emphasis.
@@ -18,13 +19,17 @@ All design follows `DESIGN.md` specifications: Eastern Minimalism, warm paper pa
 
 ## Design System Reference
 
-Per `stitch_yingjian_huacev2/` design files and `docs/superpowers/specs/2026-05-12-ui-adjustments-phase1-design.md`:
+Per `stitch_yingjian_huacev2/` design files:
 
-- **Colors**: background `#fbf9f6`, primary `#665a4a`, paper texture `#a49a8e`, on-surface `#1b1c1a`
-- **Typography**: Noto Sans SC (headings), Source Sans 3 (body), Noto Serif SC (printer-style text)
-- **Corners**: 28dp primary, 16dp cards, 12dp inner frames
-- **Shadows**: low-contrast outlines + light shadows, no heavy drop shadows
+- **Colors**: background `#fbf9f6`, primary `#665a4a`, paper texture `#a49a8e` (warm taupe, defined outside MD3 scheme as `paperTexture`), on-surface `#1b1c1a`
+- **Typography**: Noto Sans SC (headings), Source Sans 3 (body), Noto Serif SC (printer-style text, to be added to `res/font/`)
+- **Corners**: cards `RoundedCornerShape(4.dp)` (rounded-sm per HTML), inner frames `RoundedCornerShape(12.dp)`
+- **Shadows**: `Modifier.shadow(elevation = 4.dp, shape = ...)` approximate; low-contrast outlines + light shadows
 - **Spacing**: 8dp baseline, 16dp gutter, 24dp margins
+
+### Noto Serif SC Font
+
+Download and place in `app/src/main/res/font/noto_serif_sc_extralight.ttf` and `app/src/main/assets/fonts/noto_serif_sc_extralight.ttf`. Define in Typography for printer-style text (mood + date on canvas pages).
 
 ---
 
@@ -32,8 +37,8 @@ Per `stitch_yingjian_huacev2/` design files and `docs/superpowers/specs/2026-05-
 
 ### Files
 - Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookListScreen.kt`
-- Modify: `app/src/main/java/com/yingjian/core/data/database/YingJianDatabase.kt` (add `coverImageUri` column)
-- Modify: `app/src/main/java/com/yingjian/core/data/database/PhotobookEntity` (if in separate file)
+- Modify: `app/src/main/java/com/yingjian/core/data/database/YingJianDatabase.kt`
+- Modify: `app/src/main/java/com/yingjian/core/data/repository/PhotobookRepository.kt`
 
 ### TopAppBar
 
@@ -44,112 +49,134 @@ Per `stitch_yingjian_huacev2/` design files and `docs/superpowers/specs/2026-05-
 ```
 
 - Title "画册" left-aligned, matching MemoriesScreen style
-- No menu icon on left
+- No menu icon on left (per user decision)
 - Search button on right (MVP: placeholder, non-functional)
 
 ### Section Header
 
-- "所有画册" headline
-- "共 N 册，记录 M 个瞬间" subtitle
-- Ink divider below (1px, outline color at 40% opacity, 80% width centered)
+- "所有画册" headline (Noto Sans SC, title-lg)
+- "共 N 册" subtitle (Source Sans 3, body-md, on-surface-variant)
+- Ink divider: 1px horizontal, outline color at 40% opacity, 80% width centered
 
 ### Grid Layout
 
 - 2-column `LazyVerticalGrid`, `GridCells.Fixed(2)`
-- Gap: 16dp horizontal, 32dp vertical
-- Side margins: 24dp (margin-mobile)
-- Content padding: `PaddingValues(24.dp)`
+- Horizontal gap: 16dp, vertical gap: 32dp
+- Content padding: `PaddingValues(24.dp)` (margin-mobile)
 
 ### Photobook Cover Card
 
 ```
 ┌─────────────────┐
-│ ▎               │  ← spine-line (1px vertical, left 8dp)
+│ ▎               │  ← spine-line (1px left edge, `Modifier.drawBehind`)
 │ ▎  ┌─────────┐  │
 │ ▎  │         │  │  ← inner cover image area
-│ ▎  │  image  │  │     padding: 12dp (left extra 8dp)
+│ ▎  │  image  │  │     padding: 12dp
 │ ▎  │         │  │     aspect: 2:1 landscape
 │ ▎  └─────────┘  │
 │ ▎               │
-└─────────────────┘  ← aspect-ratio: 285/210
-                       background: #a49a8e (paper texture)
-                       corner: rounded-sm (4dp equivalent)
-                       shadow: book-shadow (0 4px 16px rgba(0,0,0,0.1))
-─────────────────
-画册名称             ← 16sp, Noto Sans SC, light, tracking-widest
-42页                ← 10sp, label-lg, opacity 0.5
+└─────────────────┘  ← `Modifier.aspectRatio(285f / 210f)`
+                       `Modifier.background(Color(0xFFA49A8E))`
+                       `RoundedCornerShape(4.dp)`
+                       `Modifier.shadow(elevation = 4.dp)`
+画册名称          42页
+↑ left-aligned    ↑ right-aligned
+
 ```
 
-- Paper texture background: solid color `#a49a8e` (warm taupe)
-- Spine line: 1px vertical line at 8dp from left edge, `rgba(0,0,0,0.15)` with subtle highlight
-- Cover image: inner box padding 12dp, aspect 2:1, `object-fit: cover`
-- Book shadow: subtle shadow with large blur
-- Title below: centered relative to card width, font-light, tracking-widest
-- Page count below title: smaller, lower opacity
-- Hover/tap: subtle lift (`-translate-y-1` equivalent = slight upward offset)
+- **Paper texture**: solid color `#A49A8E` (warm taupe). Defined as `val PaperTexture = Color(0xFFA49A8E)` in theme.
+- **Spine line**: 1px vertical line at 8dp from left edge, drawn via `Modifier.drawBehind { drawLine(...) }` with `Color.Black.copy(alpha = 0.15f)`. Subtle highlight with `Color.White.copy(alpha = 0.05f)`.
+- **Cover image area**: inner Box with `Modifier.padding(12.dp)`, `AspectRatio(2f)`, `ContentScale.Crop`
+- **Title row**: `Row(horizontalArrangement = Arrangement.SpaceBetween)` — title left, page count right
+- **Title**: `Noto Sans SC`, 16sp, `FontWeight.Light`, `letterSpacing = 0.1.em`
+- **Page count**: `Source Sans 3`, 10sp, `onSurface.copy(alpha = 0.5f)`
+- **Tap feedback**: slight scale-down via `Modifier.animateContentSize()` or `graphicsLayer { scaleX/Y }` on press
 
-### "New Photobook" Card
+### CreateNewAlbumCard
 
-Same 285x210 proportions, but:
-- Paper texture background, no cover image
-- Centered circle (40dp) with border outline + "add" icon inside
-- "新建画册" text below (same styling as other titles)
+Same 285x210 proportions:
+- Paper texture background (`#A49A8E`)
+- Centered circle: 40dp, `Modifier.border(1.dp, Color.Black.copy(alpha = 0.2f), CircleShape)` — **outline style, no solid fill** (per HTML reference)
+- "add" icon inside: `Icons.Default.Add`, tint `Color.Black.copy(alpha = 0.6f)`, size 20dp
+- "新建画册" text below, same styling as other titles
 
-### Selection Mode (Long Press)
+### Selection Mode
 
-Entry: long press on any photobook card → enter selection mode.
+Entry: long press on any photobook cover → enter selection mode.
 
+State management in `PhotobookUiState`:
+```kotlin
+data class PhotobookUiState(
+    val photobooks: List<PhotobookEntity> = emptyList(),
+    val isLoading: Boolean = false,
+    val isSelectionMode: Boolean = false,   // NEW
+    val selectedIds: Set<Long> = emptySet()  // NEW
+)
+```
+
+TopAppBar in selection mode:
 ```
 ┌──────────────────────────────┐
-│  ✕ 取消    已选择 N 册  🗑 删除│  ← TopAppBar changes
-├──────────────────────────────┤
-│  ┌──────┐  ┌──────┐         │
-│  │ ☑️   │  │  ☑️  │         │  ← Selected: checkmark + semi-transparent primary overlay
-│  │cover │  │cover │         │
-│  └──────┘  └──────┘         │
-│                              │
-│  ┌──────┐  ┌──────┐         │
-│  │  ☑️  │  │      │         │  ← Unselected: no overlay
-│  │cover │  │cover │         │
-│  └──────┘  └──────┘         │
+│  ✕ 取消    已选择 N 册  🗑  │
 └──────────────────────────────┘
 ```
 
-- TopAppBar changes: ✕ cancel button (left) + count text + 🗑 delete button (right)
-- Selected cards: checkmark icon (top-left), semi-transparent primary color overlay
-- Tap unselected card → select it
-- Tap selected card → deselect it
-- Tap "新建画册" card in selection mode → ignored
-- Tap delete → confirmation dialog → batch delete → exit selection mode
-- Tap ✕ or back button → exit selection mode
-- PhotobookViewModel needs `deletePhotobooks(ids: List<Long>)` batch method
+- **✕ Cancel**: exits selection mode, clears selectedIds
+- **Count text**: dynamically updates
+- **🗑 Delete**: enabled only when `selectedIds.isNotEmpty()`, shows confirmation dialog
+
+Card state in selection mode:
+- Selected: `Modifier.background(primary.copy(alpha = 0.15f))` overlay + checkmark icon top-left
+- Unselected: normal appearance
+- Tap toggles selection state
+- "新建画册" card: tap ignored in selection mode
+
+Batch delete flow:
+1. Tap delete → AlertDialog: "确定删除 N 本画册？此操作不可撤销"
+2. Confirm → `viewModel.deletePhotobooks(ids)` → exits selection mode
+3. DAO method: `@Query("DELETE FROM photobook WHERE id IN (:ids)") suspend fun deleteByIds(ids: List<Long>)`
 
 ### Cover Image Data
 
-- `PhotobookEntity` adds `coverImageUri: String?` — null = default paper texture
-- Cover set in editor page (Subsystem B)
-- Cover image loaded via Coil with `Uri.parse(coverImageUri)`
+- `PhotobookEntity` adds `coverImageUri: String? = null` — null means default paper texture
+- Cover set in editor page via TopAppBar cover button (see Subsystem B)
+- Cover image loaded via Coil: `model = coverImageUri?.let { Uri.parse(it) }`
+- `coverImageUri` stores content URI string from the image picker
 
-### Database Changes
+### Database Migration
 
+**Current version: 3 → New version: 4**
+
+```kotlin
+@Database(
+    version = 4,
+    entities = [MemoryRecordEntity::class, PhotobookEntity::class, PageLayoutEntity::class],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4)  // adds coverImageUri column
+    ]
+)
+abstract class YingJianDatabase : RoomDatabase() { ... }
+```
+
+`PhotobookEntity` changes:
 ```kotlin
 data class PhotobookEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val paperSize: String,
-    val coverImageUri: String? = null,  // NEW
+    val coverImageUri: String? = null,  // NEW: v3→v4, nullable TEXT
     val createdAt: Long,
     val updatedAt: Long
 )
 ```
 
-Room auto-migration: add `coverImageUri` column (nullable TEXT, default null).
-
 ### Interaction Flow
 
 ```
 Photobook List
-  ├─ Tap "新建画册" → BottomSheet(name + size) → PhotoPicker → create
+  ├─ Tap "新建画册" → BottomSheet(name only, size=285x210 implicitly) → PhotoPicker → create
   ├─ Tap photobook cover → navigate to Editor (Subsystem B)
   ├─ Long press cover → enter selection mode
   │    ├─ Tap 🗑 → confirmation dialog → batch delete → exit
@@ -162,26 +189,42 @@ Photobook List
 ## Subsystem B: Photobook Editor Page
 
 ### Files
-- Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookEditorScreen.kt` (full rewrite)
-- Modify: `app/src/main/java/com/yingjian/feature/photobook/model/PageState.kt` (add `memoryId`)
-- Modify: `app/src/main/java/com/yingjian/feature/photobook/model/BookState.kt` (no changes)
-- Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookCanvasPage.kt` (full rewrite)
+- Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookEditorScreen.kt` (incremental changes)
+- Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookCanvasPage.kt` (incremental changes)
+- Modify: `app/src/main/java/com/yingjian/feature/photobook/model/PageElement.kt` (no changes — `ImageElement.memoryId` already exists)
 - Modify: `app/src/main/java/com/yingjian/feature/photobook/export/PdfExportUtil.kt`
 - Modify: `app/src/main/java/com/yingjian/core/ui/navigation/YingJianNavHost.kt` (add preview route, update editor route)
+- Modify: `app/src/main/java/com/yingjian/core/ui/navigation/NavDestinations.kt` (add Preview route)
+
+### PaperSize Simplification
+
+Per user decision: **only keep 285x210 (方12寸横版)**. No paper size selection in UI.
+
+```kotlin
+enum class PaperSize(val widthMm: Float, val heightMm: Float) {
+    TWELVE_INCH_LANDSCAPE(285f, 210f)  // 方12寸横版 — the only size
+}
+```
+
+`CreatePhotobookBottomSheet` simplified: no paper size selector, only name input. Paper size is always 285x210.
+
+**Note:** Existing photobooks with other paper sizes (A4, SIX_INCH, SQUARE) will still display correctly — their `paperSize` string is preserved. For new photobooks, only 285x210 is created.
 
 ### TopAppBar
 
+Per review P3-4, use standard Material 3 pattern:
 ```
 ┌──────────────────────────────┐
-│  ← 编辑    👁️预览 📤导出 💾保存│
+│  ←  画册名称    👁️ 📤 💾     │
 └──────────────────────────────┘
 ```
 
-- Left: back arrow + "编辑" text
-- Right: three icon buttons (no text labels)
-  - 👁️ Preview — navigate to preview page
-  - 📤 Export — generate and share PDF
-  - 💾 Save — persist to database
+- Left: back arrow (no text label, standard M3 navigationIcon)
+- Center: photobook name as title
+- Right: three icon buttons (no text):
+  - `Icons.Default.Visibility` (👁️ Preview)
+  - `Icons.Default.PictureAsPdf` (📤 Export PDF)
+  - `Icons.Default.Save` (💾 Save)
 
 ### Single Page Canvas
 
@@ -190,114 +233,122 @@ Photobook List
      │                      │
      │    (whitespace)      │
      │                      │
-     │   ┌──────────────┐   │  ← Image centered, aspect 3:4
-     │   │              │   │
-     │   │    photo     │   │
+     │   ┌──────────────┐   │  ← Image centered
+     │   │              │   │     ContentScale.Fit
+     │   │    photo     │   │     aspect ratio from metadata
      │   │              │   │
      │   └──────────────┘   │
      │                      │
-     │   心情描述文字         │  ← Noto Serif SC, 11sp, extralight, letter-spacing 0.2em
-     │   2024.11.15         │  ← Date below mood text
+     │   心情描述文字         │  ← Noto Serif SC, 11sp, FontWeight.ExtraLight
+     │   2024.11.15         │     letterSpacing = 0.2.em
      │                      │
-     │                 03   │  ← Page number (bottom-right)
+     │                 03   │  ← Page number, outline-variant, 11sp
      └──────────────────────┘
 ```
 
-- Aspect ratio: `285/210` (landscape)
-- Width: fills screen, max 600dp
-- Paper texture: `#faf9f6` background with subtle SVG noise overlay (via Canvas)
-- Shadow: `0 4px 12px rgba(0,0,0,0.05)`
-- Image: centered, default aspect 3:4, white margins ~30-40dp on all sides
-- Mood text + date: below image, centered, Noto Serif SC (printer-style), small size
-- Page number: bottom-right corner, small, outline-variant color
-- Each page contains exactly one photo
+- Aspect ratio: `285/210` (landscape), width fills screen max 600dp
+- Paper texture: `#FAF9F6` background
+- Image: centered, default margins ~40dp on all sides
+- Mood text + date: below image, centered, Noto Serif SC ExtraLight
+- Page number: bottom-right corner
+- Mood text and date derived from `ImageElement.memoryId` — look up `MemoryRecordEntity` by id to get `moodText` and `timestamp`
+- `PageState` does NOT need a new `memoryId` field — derive from `elements.firstOrNull { it is ImageElement }?.memoryId`
 
-### Gesture-Based Image Editing (Hybrid Mode)
+### Page Navigation (Button-Based)
+
+Per user decision: **remove HorizontalPager**, use button-based navigation with custom slide animation. This eliminates gesture conflicts — all touch gestures go to image editing.
+
+```
+   ◀                          ▶
+          ● ○ ○ ○ ○
+        (page indicator)
+```
+
+- **◀ ▶ buttons**: flanking the page indicator, navigate previous/next page
+- **Page indicator**: row of dots, current page elongated (16dp wide vs 6dp)
+- **No swipe-based page flipping** — single-finger drag reserved for moving images
+- **Transition**: `AnimatedContent` with `slideInHorizontally` / `slideOutHorizontally` for page change animation
+
+Implementation approach:
+```kotlin
+var currentPage by remember { mutableIntStateOf(0) }
+AnimatedContent(
+    targetState = currentPage,
+    transitionSpec = {
+        if (targetState > initialState) {
+            slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
+        } else {
+            slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
+        }
+    }
+) { pageIndex ->
+    PhotobookCanvasPage(pageState = bookState.pages[pageIndex], ...)
+}
+```
+
+### Gesture-Based Image Editing
+
+All touch events go to image manipulation (no HorizontalPager conflict):
 
 **Default state:**
-- Single-finger drag: move image position
-- Two-finger pinch: scale image
-- Double-tap: enter selected state
+- Single-finger drag on image: move position (update `ImageElement.xMm/yMm`)
+- Two-finger pinch: scale (update `ImageElement.widthMm/heightMm`)
+- Double-tap on image: enter selected state
 
 **Selected state:**
-- Selection border: primary color, 1px, around image
-- Four corner handles: 8x8dp white squares
-  - Top-left: cursor-nwse-resize
-  - Top-right: cursor-nesw-resize
-  - Bottom-left: cursor-nesw-resize
-  - Bottom-right: cursor-nwse-resize
+- Selection border: `primary` color, 1px, `Modifier.border(1.dp, primary, RoundedCornerShape(2.dp))`
+- Four corner handles: 8x8dp white squares with `Modifier.border(1.dp, primary, ...)`
 - Drag corner handle: resize image (maintain aspect ratio)
 - Bottom toolbar appears: [🗑 Delete] [↺ Reset]
+- Tap outside image → exit selected state
 
-### Page Navigation
+Gesture implementation note: use `Modifier.pointerInput` with custom `detectTransformGestures` for pan/zoom, `detectTapGestures(onDoubleTap = ...)` for selection.
 
-```
-   ◀  ────●────  ▶
-```
+### Bottom Toolbar
 
-- HorizontalPager for page switching
-- Page indicator: dots, current page dot is elongated (24dp wide vs 8dp)
-- Left/right arrow buttons on sides of indicator
-- Additional tap zones: tap left half of screen → previous page, tap right half → next page
-- Slide gesture: main navigation method
-- Transition: slide animation (MVP), curl animation (future)
+| State | Content |
+|-------|---------|
+| No pages / empty | None |
+| Has image, not selected | `[+]` Add Photo (bottom center, `FloatingActionButton`-style) |
+| Image selected | `Row`: [🗑 Delete] [↺ Reset] (bottom center) |
 
-### Add Photo to Book
+Delete action: removes image from current page. If page becomes empty, remove the page entirely.
 
-Tap [+] button (visible at bottom when no image selected):
-- Opens PhotoPicker showing memories from 影记 (same as create flow)
-- Selected photos → each photo becomes a new page appended to end
-- Auto-navigate to the first new page
+### Add Photo to Book (Append Mode)
 
-### Bottom Toolbar (Contextual)
-
-| State | Toolbar Content |
-|-------|----------------|
-| No page / empty | None |
-| Has image, not selected | [+] Add Photo button (bottom center) |
-| Image selected | [🗑 Delete] [↺ Reset] (bottom center) |
+Tap `[+]` button:
+1. Opens PhotoPicker showing memories from 影记
+2. `onComplete` returns selected memory IDs
+3. For each selected memory:
+   - Fetch `MemoryRecordEntity` from repository
+   - Call `AutoLayoutAlgorithm.createSinglePhotoPage(memory, paperSize)` to generate a new `PageState` with the image centered
+   - Append to `bookState.pages`
+4. Auto-navigate to the first new page
 
 ### Cover Photo Setting
 
-- Accessible via long-press on the first page (cover page) or a settings action
-- Opens a bottom sheet: "设为封面" option → saves current page's image URI to `PhotobookEntity.coverImageUri`
-- Or: in TopAppBar add a cover icon button when on the first page
+- TopAppBar: add cover icon button (`Icons.Default.Style`) visible on the first page (or always)
+- Tap → BottomSheet: "设为封面" → saves current page's `ImageElement.imageUri` to `PhotobookEntity.coverImageUri`
+- Avoids gesture conflict with long-press (per review P2-3)
 
 ### PDF Export
 
-- Icon button in TopAppBar: 📤 Export
+- Icon button in TopAppBar: `Icons.Default.PictureAsPdf`
 - Uses `PdfExportUtil` to render all pages at 285x210mm
 - Pages rendered with paper texture background, images at their positioned coordinates, mood text + dates
-- Output: PDF file, shared via Android share sheet
-- Cover page (if set) rendered as first page
+- Output: PDF file, shared via Android share sheet using `ActivityResultContracts.CreateDocument`
 
 ### Save
 
 - Persists all `PageState` → `PageLayoutEntity` records
 - Updates `PhotobookEntity.updatedAt` and `coverImageUri`
-- Runs on IO dispatcher, shows brief success feedback
-
-### Data Model
-
-```kotlin
-// PageState adds memoryId for mood/date display
-data class PageState(
-    val pageNumber: Int,
-    val elements: List<PageElement>,
-    val trimWidthMm: Float,
-    val trimHeightMm: Float,
-    val memoryId: Long? = null,  // NEW: linked memory for mood text + date
-    val bleedMm: Float = 3.0f
-)
-```
+- Runs on IO dispatcher, shows brief Snackbar feedback
 
 ### Interaction Flow
 
 ```
 Editor
-  ├─ Slide left/right → flip pages
-  ├─ Tap left/right half → flip pages
-  ├─ ◀/▶ arrows → flip pages
+  ├─ ◀/▶ buttons → flip pages (animated slide)
   ├─ Single-finger drag on image → move
   ├─ Two-finger pinch → scale
   ├─ Double-tap image → select (show handles + bottom toolbar)
@@ -305,6 +356,7 @@ Editor
   │    ├─ 🗑 Delete → remove image from page
   │    └─ ↺ Reset → image back to default position
   ├─ [+] button → PhotoPicker → append new pages
+  ├─ Cover icon → BottomSheet "设为封面"
   ├─ 👁️ Preview → navigate to Preview
   ├─ 📤 Export → generate PDF → share sheet
   └─ 💾 Save → persist all pages → back to list
@@ -316,66 +368,87 @@ Editor
 
 ### Files
 - Create: `app/src/main/java/com/yingjian/feature/photobook/PhotobookPreviewScreen.kt`
-- Modify: `app/src/main/java/com/yingjian/core/ui/navigation/NavDestinations.kt` (add Preview route)
+- Modify: `app/src/main/java/com/yingjian/core/ui/navigation/NavDestinations.kt` (add `Preview` route with `photobookId` param)
 - Modify: `app/src/main/java/com/yingjian/core/ui/navigation/YingJianNavHost.kt` (add Preview composable)
+
+### Preview Route
+
+```kotlin
+// NavDestinations.kt
+data object Preview : NavDestinations("photobook_preview/{photobookId}") {
+    fun createRoute(photobookId: Long) = "photobook_preview/$photobookId"
+}
+
+// YingJianNavHost.kt
+composable(NavDestinations.Preview.route) { backStackEntry ->
+    val photobookId = backStackEntry.arguments?.getString("photobookId")?.toLongOrNull()
+    // Load book state from repository, render PhotobookPreviewScreen
+}
+```
 
 ### TopBar
 
 ```
 ┌──────────────────────────────┐
-│  ← 返回               📤分享 │
+│  ←                      📤   │
 └──────────────────────────────┘
 ```
 
-- Semi-transparent, floating over content
+- Semi-transparent, floating over content (`Modifier.background(Color.Transparent)`)
 - No title text
-- Back arrow + share/export icon
-- Blur backdrop effect
+- Back arrow (left) + share icon (right)
+- No blur backdrop in MVP (simplify implementation)
 
 ### Portrait Mode (Single Page)
 
-```
-┌──────────────────────────────┐
-│                              │
-│   ┌──────────────────┐      │
-│   │                  │      │
-│   │     Page N       │      │  ← Single page 285x210
-│   │                  │      │     Fills screen width
-│   └──────────────────┘      │
-│                              │
-│        ◀  ●●●●●  ▶          │
-│                              │
-│  [tap left zone] [tap right] │
-└──────────────────────────────┘
-```
+Vertical phone orientation — displays one 285x210 page filling screen width:
 
-- Single page fills screen width
-- Page rendered with paper texture, image, mood text, page number (same as editor)
-- Tap left/right zones + slide to flip pages
+- Page rendered identically to editor canvas (paper texture, image, mood text, date, page number)
+- Swipe left → next page (+1)
+- Swipe right → previous page (-1)
+- Tap left half → previous page
+- Tap right half → next page
+- ◀/▶ arrow buttons + page indicator at bottom
 
 ### Landscape Mode (Spread View)
 
+Horizontal phone orientation — displays two pages side by side:
+
 ```
 ┌─────────────────────────────────────────────┐
-│                                             │
 │  ┌──────────┐  ┃  ┌──────────┐             │
-│  │          │  ┃  │          │             │
 │  │  Page N  │  ┃  │ Page N+1  │             │
-│  │          │  ┃  │          │             │
+│  │  (left)  │  ┃  │  (right) │             │
 │  └──────────┘  ┃  └──────────┘             │
 │           spine crease                      │
-│                                             │
-│              ◀  ●●●  ▶                     │
 └─────────────────────────────────────────────┘
 ```
 
-- Spread width: `90vw`, max 1200dp, aspect `2.7:1` (two 285x210 pages side by side)
-- Spine effect at center:
-  - 40dp gradient shadow from transparent → `rgba(0,0,0,0.15)` → transparent
-  - 1px inner highlight white line
-  - 2px subtle center crease line
-- Each half-page: paper texture background, rendered with image and text from editor
-- Flipping a spread advances +2 pages or reverses -2 pages
+- Spread width: 90% of screen width, aspect ~2.7:1
+- Each half: one 285x210 page
+- Spine crease center:
+  - `Canvas`-drawn gradient shadow: transparent → `Color.Black.copy(alpha = 0.15f)` → transparent, width ~40dp
+  - 1px white line at center for inner fold highlight: `Color.White.copy(alpha = 0.3f)`
+  - This is drawn as a single composable overlay on the spread container
+
+Spine implementation (simplified):
+```kotlin
+Canvas(modifier = Modifier.fillMaxSize()) {
+    // Center gradient shadow
+    val centerX = size.width / 2
+    drawRect(
+        brush = Brush.horizontalGradient(
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.15f), Color.Transparent),
+            startX = centerX - 20.dp.toPx(),
+            endX = centerX + 20.dp.toPx()
+        ),
+        topLeft = Offset(centerX - 20.dp.toPx(), 0f),
+        size = Size(40.dp.toPx(), size.height)
+    )
+    // Inner highlight
+    drawLine(Color.White.copy(alpha = 0.3f), Offset(centerX, 0f), Offset(centerX, size.height), 1.dp.toPx())
+}
+```
 
 ### Page Flip Interaction
 
@@ -387,29 +460,26 @@ Editor
 | Tap right half | Next page | Next spread |
 | ◀ / ▶ arrows | Previous / next | Previous / next spread |
 
+Use `HorizontalPager` for swipe-based page navigation in preview mode.
+
 ### Page Indicator
 
-- Bottom centered
-- Dots with current page elongated
-- Arrow buttons on sides
-
-### Transition Animation
-
-- Page change: horizontal slide with slight scale (current: 1.0, outgoing: 0.95)
-- Orientation change: animate between single-page and spread layouts
+- Bottom centered, above navigation buttons
+- Dots: current page elongated (16dp × 6dp), others (6dp × 6dp)
+- ◀ ▶ arrow buttons flanking indicator
 
 ### Orientation Handling
 
-- Listen to device orientation via `LocalConfiguration.current.orientation`
-- Portrait: `GridCells.Fixed(1)` effectively, single page view
-- Landscape: two pages side-by-side in spread view
-- Transition animated when rotation detected
+- `LocalConfiguration.current.orientation` to detect portrait/landscape
+- Portrait: single page view
+- Landscape: spread (two-page) view
+- `AnimatedContent` or `Crossfade` for smooth transition on orientation change
 
 ### Interaction Flow
 
 ```
 Preview
-  ├─ Swipe left / tap right → next page (portrait) or spread (landscape)
+  ├─ Swipe left / tap right → next page/spread
   ├─ Swipe right / tap left → previous
   ├─ ◀/▶ buttons → flip pages
   ├─ ← Back → return to editor
@@ -420,27 +490,12 @@ Preview
 
 ## Implementation Order
 
-1. **Subsystem A** — List page redesign + DB migration
-2. **Subsystem B** — Editor full rewrite + PDF export
-3. **Subsystem C** — Preview page (depends on B's page rendering)
+1. **Phase 1: Database + PaperSize** — v3→v4 migration, add `TWELVE_INCH_LANDSCAPE`, simplify PaperSize, Noto Serif SC font
+2. **Phase 2: Subsystem A** — PhotobookListScreen incremental redesign (285x210 cards, selection mode, batch delete)
+3. **Phase 3: Subsystem B** — Editor incremental changes (285x210 canvas, button nav, gesture editing, [+] append, PDF export)
+4. **Phase 4: Subsystem C** — Preview page (single/spread views, spine effect, orientation handling)
 
-Each subsystem is independently testable after completion.
-
----
-
-## PaperSize Addition
-
-New PaperSize enum value for 方12寸横版:
-
-```kotlin
-enum class PaperSize(val widthMm: Float, val heightMm: Float) {
-    // ... existing values
-    TWELVE_INCH_LANDSCAPE(285f, 210f),  // NEW: 方12寸横版
-    // ... existing values continue
-}
-```
-
-This is the default paper size for all photobooks going forward. The editor canvas renders at this size.
+Each phase is independently testable.
 
 ---
 
@@ -448,5 +503,19 @@ This is the default paper size for all photobooks going forward. The editor canv
 
 | Version | Change |
 |---------|--------|
-| Current | (check existing version) |
-| +1 | Add `coverImageUri TEXT` to `photobook` table (nullable, default null) |
+| 3 (current) | Existing schema with `memory_record`, `photobook`, `page_layout` tables |
+| 4 (new) | Add `coverImageUri TEXT` to `photobook` table (nullable, default null). `AutoMigration(3, 4)`. |
+
+Full `@Database` configuration:
+```kotlin
+@Database(
+    version = 4,
+    entities = [MemoryRecordEntity::class, PhotobookEntity::class, PageLayoutEntity::class],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4)
+    ]
+)
+abstract class YingJianDatabase : RoomDatabase() { ... }
+```
