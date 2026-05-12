@@ -119,7 +119,7 @@ fun YingJianNavHost(
                     .getOrNull() ?: PaperSize.A4
                 val ids = selectedIdsStr.split(",").mapNotNull { it.toLongOrNull() }
 
-                LaunchedEffect(Unit) {
+                LaunchedEffect(selectedIdsStr, paperSizeStr) {
                     viewModel.createPhotobook(
                         name = "未命名画册",
                         paperSize = paperSize,
