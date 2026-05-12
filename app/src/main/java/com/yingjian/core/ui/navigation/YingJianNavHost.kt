@@ -83,9 +83,17 @@ fun YingJianNavHost(
             MemoriesScreen(
                 viewModel = viewModel,
                 onNavigateToNewPost = { uris: List<Uri>, dates: List<Long> ->
+                    val urisJson = Json.encodeToString(
+                        ListSerializer(String.serializer()),
+                        uris.map { it.toString() }
+                    )
+                    val datesJson = Json.encodeToString(
+                        ListSerializer(Long.serializer()),
+                        dates
+                    )
                     navController.currentBackStackEntry?.savedStateHandle?.apply {
-                        set("newPostUris", uris.map { it.toString() })
-                        set("newPostDates", dates)
+                        set("newPostUris", urisJson)
+                        set("newPostDates", datesJson)
                     }
                     navController.navigate(NavDestinations.NewPost.route)
                 },
@@ -137,8 +145,19 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
-            val uriStrings = backStackEntry.savedStateHandle.get<List<String>>("newPostUris") ?: emptyList()
-            val dates = backStackEntry.savedStateHandle.get<List<Long>>("newPostDates") ?: emptyList()
+            val urisJsonStr = backStackEntry.savedStateHandle.get<String>("newPostUris")
+            val datesJsonStr = backStackEntry.savedStateHandle.get<String>("newPostDates")
+
+            val uriStrings = urisJsonStr?.let {
+                runCatching {
+                    Json.decodeFromString<List<String>>(it)
+                }.getOrNull()
+            } ?: emptyList()
+            val dates = datesJsonStr?.let {
+                runCatching {
+                    Json.decodeFromString<List<Long>>(it)
+                }.getOrNull()
+            } ?: emptyList()
             val uris = uriStrings.map { Uri.parse(it) }
 
             if (uris.isNotEmpty() && dates.isNotEmpty()) {
