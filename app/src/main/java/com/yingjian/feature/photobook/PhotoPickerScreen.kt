@@ -1,5 +1,6 @@
 package com.yingjian.feature.photobook
 
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -144,7 +145,7 @@ fun PhotoGridItem(
             .clickable(onClick = onToggle)
     ) {
         AsyncImage(
-            model = memory.imageUri,
+            model = Uri.parse(memory.imageUri),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()

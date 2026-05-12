@@ -183,7 +183,7 @@ private fun CalendarDayCell(
             ) {
                 // Background image
                 AsyncImage(
-                    model = dayInfo.memories.first().imageUri,
+                    model = android.net.Uri.parse(dayInfo.memories.first().imageUri),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

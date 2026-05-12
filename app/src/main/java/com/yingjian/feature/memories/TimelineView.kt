@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.yingjian.core.data.database.MemoryRecordEntity
+import android.net.Uri
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -87,7 +88,7 @@ fun TimelineView(
                         Column {
                             Box {
                                 AsyncImage(
-                                    model = featured.imageUri,
+                                    model = Uri.parse(featured.imageUri),
                                     contentDescription = featured.moodText,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
@@ -155,7 +156,7 @@ fun TimelineView(
                             ) {
                                 Column {
                                     AsyncImage(
-                                        model = memory.imageUri,
+                                        model = Uri.parse(memory.imageUri),
                                         contentDescription = memory.moodText,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
