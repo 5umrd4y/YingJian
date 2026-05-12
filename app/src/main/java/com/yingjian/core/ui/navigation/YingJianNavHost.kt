@@ -91,8 +91,6 @@ fun YingJianNavHost(
                         ListSerializer(Long.serializer()),
                         dates
                     )
-                    android.util.Log.d("NavDebug", "WRITING: urisJson length=${urisJson.length}, datesJson length=${datesJson.length}, count=${uris.size}")
-                    android.util.Log.d("NavDebug", "WRITING: urisJson=${urisJson.take(100)}")
                     navController.currentBackStackEntry?.savedStateHandle?.apply {
                         set("newPostUris", urisJson)
                         set("newPostDates", datesJson)
@@ -151,9 +149,6 @@ fun YingJianNavHost(
                 val urisJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostUris")
                 val datesJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostDates")
 
-                android.util.Log.d("NavDebug", "READING: urisJsonStr=${urisJsonStr?.take(100)}")
-                android.util.Log.d("NavDebug", "READING: datesJsonStr=${datesJsonStr?.take(50)}")
-
                 val uriStrings = urisJsonStr?.let {
                     runCatching { Json.decodeFromString<List<String>>(it) }.getOrNull()
                 } ?: emptyList()
@@ -161,7 +156,6 @@ fun YingJianNavHost(
                     runCatching { Json.decodeFromString<List<Long>>(it) }.getOrNull()
                 } ?: emptyList()
                 val parsedUris = uriStrings.map { Uri.parse(it) }
-                android.util.Log.d("NavDebug", "PARSED: uris count=${uriStrings.size}, dates count=${datesList.size}")
 
                 navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostUris")
                 navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostDates")
