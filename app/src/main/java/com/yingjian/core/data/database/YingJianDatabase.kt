@@ -23,7 +23,8 @@ data class MemoryRecordEntity(
     val longitude: Double?,
     val moodText: String?,
     val tags: String,
-    val createdAt: Long
+    val createdAt: Long,
+    @androidx.room.ColumnInfo(name = "photo_count", defaultValue = "1") val photoCount: Int = 1
 )
 
 @Dao
@@ -110,7 +111,10 @@ interface PageLayoutDao {
 @TypeConverters(Converters::class)
 @androidx.room.Database(
     entities = [MemoryRecordEntity::class, PhotobookEntity::class, PageLayoutEntity::class],
-    version = 1,
+    version = 2,
+    autoMigrations = [
+        androidx.room.AutoMigration(from = 1, to = 2)
+    ],
     exportSchema = true
 )
 abstract class YingJianDatabase : RoomDatabase() {
