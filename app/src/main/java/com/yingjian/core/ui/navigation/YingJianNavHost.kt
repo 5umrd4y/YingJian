@@ -145,8 +145,10 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
-            val urisJsonStr = backStackEntry.savedStateHandle.get<String>("newPostUris")
-            val datesJsonStr = backStackEntry.savedStateHandle.get<String>("newPostDates")
+            // Read from the previous back stack entry's savedStateHandle
+            // (which is where MemoriesScreen set the data before navigating)
+            val urisJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostUris")
+            val datesJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostDates")
 
             val uriStrings = urisJsonStr?.let {
                 runCatching {
@@ -159,6 +161,10 @@ fun YingJianNavHost(
                 }.getOrNull()
             } ?: emptyList()
             val uris = uriStrings.map { Uri.parse(it) }
+
+            // Clean up savedStateHandle after reading
+            navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostUris")
+            navController.previousBackStackEntry?.savedStateHandle?.remove<String>("newPostDates")
 
             if (uris.isNotEmpty() && dates.isNotEmpty()) {
                 val imageUrisJson = Json.encodeToString(
