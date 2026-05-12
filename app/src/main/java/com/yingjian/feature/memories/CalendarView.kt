@@ -1,13 +1,16 @@
 package com.yingjian.feature.memories
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,23 +74,45 @@ fun CalendarView(memories: List<MemoryRecordEntity>) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     weekDays.forEach { dayInfo ->
                         Box(
-                            modifier = Modifier.weight(1f).aspectRatio(1f).padding(1.dp),
-                            contentAlignment = Alignment.TopCenter
+                            modifier = Modifier.weight(1f).aspectRatio(1f).padding(1.dp)
                         ) {
                             if (dayInfo != null) {
-                                Text(
-                                    dayInfo.day.toString(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                                dayInfo.memories.firstOrNull()?.let { firstMemory ->
+                                // Background: thumbnail
+                                dayInfo.memories.firstOrNull()?.let { memory ->
                                     AsyncImage(
-                                        model = firstMemory.imageUri,
+                                        model = memory.imageUri,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } ?: Box(
+                                    modifier = Modifier.fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                                )
+
+                                // Foreground: date overlay
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        dayInfo.day.toString(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier
+                                            .background(
+                                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.4f),
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
+                            } else {
+                                // Empty day cell
+                                Box(
+                                    modifier = Modifier.fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                                )
                             }
                         }
                     }
