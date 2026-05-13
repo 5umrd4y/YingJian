@@ -48,10 +48,11 @@ class PhotobookViewModel(
         }
     }
 
-    fun createPhotobook(name: String, paperSize: PaperSize, selectedMemoryIds: List<Long>) {
+    fun createPhotobook(name: String, selectedMemoryIds: List<Long>) {
         viewModelScope.launch {
             uiState = uiState.copy(isLoading = true)
 
+            val paperSize = PaperSize.TWELVE_INCH_LANDSCAPE
             val photobook = PhotobookEntity(
                 name = name,
                 paperSize = paperSize.name,

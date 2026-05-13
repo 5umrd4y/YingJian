@@ -1,12 +1,11 @@
 package com.yingjian.feature.photobook
 
 import androidx.compose.runtime.Composable
-import com.yingjian.feature.photobook.model.PaperSize
 
 @Composable
 fun PhotobookScreen(
     viewModel: PhotobookViewModel,
-    onNavigateToPhotoPicker: (PaperSize) -> Unit = {},
+    onNavigateToPhotoPicker: () -> Unit = {},
     onNavigateToEditor: (Long) -> Unit = {}
 ) {
     PhotobookListScreen(

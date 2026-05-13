@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -42,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yingjian.core.data.database.PhotobookEntity
-import com.yingjian.feature.photobook.model.PaperSize
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -50,7 +52,7 @@ import java.util.Locale
 @Composable
 fun PhotobookListScreen(
     viewModel: PhotobookViewModel,
-    onNavigateToPhotoPicker: (PaperSize) -> Unit = {},
+    onNavigateToPhotoPicker: () -> Unit = {},
     onNavigateToEditor: (Long) -> Unit = {}
 ) {
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
@@ -131,9 +133,9 @@ fun PhotobookListScreen(
     if (showCreateDialog) {
         CreatePhotobookBottomSheet(
             onDismiss = { showCreateDialog = false },
-            onCreate = { name, paperSize ->
+            onCreate = { name ->
                 showCreateDialog = false
-                onNavigateToPhotoPicker(paperSize)
+                onNavigateToPhotoPicker()
             }
         )
     }
@@ -242,10 +244,9 @@ private fun AlbumCard(
 @Composable
 private fun CreatePhotobookBottomSheet(
     onDismiss: () -> Unit,
-    onCreate: (String, PaperSize) -> Unit
+    onCreate: (String) -> Unit
 ) {
     var name by rememberSaveable { mutableStateOf("") }
-    var selectedSize by rememberSaveable { mutableStateOf(PaperSize.A4) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -262,53 +263,22 @@ private fun CreatePhotobookBottomSheet(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
-
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("画册名称") },
                 modifier = Modifier.fillMaxWidth()
             )
-
-            Text(
-                "纸张大小",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
-            )
-
-            androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PaperSize.entries.forEach { size ->
-                    TextButton(
-                        onClick = { selectedSize = size },
-                        border = if (size == selectedSize)
-                            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                        else null
-                    ) {
-                        Text(
-                            size.name.replace("_", " "),
-                            color = if (size == selectedSize)
-                                MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(vertical = 16.dp))
-
-            androidx.compose.foundation.layout.Row(
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text("取消")
-                }
+                TextButton(onClick = onDismiss) { Text("取消") }
                 TextButton(
-                    onClick = { onCreate(name.takeIf { it.isNotBlank() } ?: "未命名画册", selectedSize) },
+                    onClick = { onCreate(name.takeIf { it.isNotBlank() } ?: "未命名画册") },
                     enabled = name.isNotBlank()
-                ) {
-                    Text("下一步")
-                }
+                ) { Text("下一步") }
             }
         }
     }

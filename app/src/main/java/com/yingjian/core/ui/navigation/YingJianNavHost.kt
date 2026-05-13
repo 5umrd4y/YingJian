@@ -112,28 +112,22 @@ fun YingJianNavHost(
             val viewModel: PhotobookViewModel = viewModel(factory = factory)
 
             val selectedIdsStr = backStackEntry.savedStateHandle.get<String>("selectedMemoryIds")
-            val paperSizeStr = backStackEntry.savedStateHandle.get<String>("paperSize")
 
-            if (selectedIdsStr != null && paperSizeStr != null) {
-                val paperSize = runCatching { PaperSize.valueOf(paperSizeStr) }
-                    .getOrNull() ?: PaperSize.A4
+            if (selectedIdsStr != null) {
                 val ids = selectedIdsStr.split(",").mapNotNull { it.toLongOrNull() }
 
-                LaunchedEffect(selectedIdsStr, paperSizeStr) {
+                LaunchedEffect(selectedIdsStr) {
                     viewModel.createPhotobook(
                         name = "未命名画册",
-                        paperSize = paperSize,
                         selectedMemoryIds = ids
                     )
                     backStackEntry.savedStateHandle.remove<String>("selectedMemoryIds")
-                    backStackEntry.savedStateHandle.remove<String>("paperSize")
                 }
             }
 
             PhotobookScreen(
                 viewModel = viewModel,
-                onNavigateToPhotoPicker = { paperSize ->
-                    backStackEntry.savedStateHandle.set("paperSize", paperSize.name)
+                onNavigateToPhotoPicker = {
                     navController.navigate(NavDestinations.PhotoPicker.route)
                 },
                 onNavigateToEditor = { photobookId ->
@@ -322,11 +316,8 @@ fun YingJianNavHost(
                 memories = allMemories,
                 onBack = { navController.popBackStack() },
                 onComplete = { selectedIds ->
-                    val paperSize = backStackEntry.savedStateHandle.get<String>("paperSize")
-
                     navController.previousBackStackEntry?.savedStateHandle?.apply {
                         set("selectedMemoryIds", selectedIds.map { it.toString() }.joinToString(","))
-                        paperSize?.let { set("paperSize", it) }
                     }
                     navController.popBackStack()
                 }

@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.LayoutMode
-import com.yingjian.feature.photobook.model.PaperSize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,19 +92,6 @@ fun PhotobookEditorScreen(
                 )
             }
 
-            // Bottom controls: paper size selector
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                PaperSizeSelector(
-                    currentSize = runCatching { PaperSize.valueOf(bookState.photobook.paperSize) }.getOrDefault(PaperSize.A4),
-                    onSizeChange = { /* Handle size change */ }
-                )
-            }
-
             // Zoom controls (bottom right)
             Box(
                 modifier = Modifier
@@ -127,24 +112,3 @@ fun PhotobookEditorScreen(
     }
 }
 
-@Composable
-fun PaperSizeSelector(
-    currentSize: PaperSize,
-    onSizeChange: (PaperSize) -> Unit
-) {
-    Row {
-        Text(
-            "Canvas size",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.align(Alignment.CenterVertically).padding(end = 8.dp)
-        )
-        listOf(PaperSize.A4, PaperSize.SIX_INCH_LANDSCAPE, PaperSize.SQUARE).forEach { size ->
-            FilterChip(
-                selected = size == currentSize,
-                onClick = { onSizeChange(size) },
-                label = { Text(size.name.replace("_", " ")) },
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
-        }
-    }
-}

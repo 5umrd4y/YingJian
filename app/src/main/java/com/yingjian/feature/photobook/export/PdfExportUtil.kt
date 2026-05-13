@@ -48,7 +48,7 @@ object PdfExportUtil {
 
         val paperSize = runCatching {
             PaperSize.valueOf(bookState.photobook.paperSize)
-        }.getOrDefault(PaperSize.A4)
+        }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
 
         val pageWidthPx = mmToPx(paperSize.widthMm)
         val pageHeightPx = mmToPx(paperSize.heightMm)
