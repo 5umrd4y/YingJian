@@ -15,6 +15,7 @@ interface PhotobookRepository {
     suspend fun savePageLayout(pageLayout: PageLayoutEntity): Long
     suspend fun deletePageLayouts(photobookId: Long)
     suspend fun getPageCount(photobookId: Long): Int
+    suspend fun deletePhotobooks(ids: List<Long>)
 }
 
 class PhotobookRepositoryImpl(
@@ -30,4 +31,11 @@ class PhotobookRepositoryImpl(
     override suspend fun savePageLayout(pageLayout: PageLayoutEntity): Long = pageLayoutDao.insert(pageLayout)
     override suspend fun deletePageLayouts(photobookId: Long) = pageLayoutDao.deleteByPhotobookId(photobookId)
     override suspend fun getPageCount(photobookId: Long): Int = pageLayoutDao.countByPhotobookId(photobookId)
+
+    override suspend fun deletePhotobooks(ids: List<Long>) {
+        ids.forEach { id ->
+            pageLayoutDao.deleteByPhotobookId(id)
+        }
+        photobookDao.deleteByIds(ids)
+    }
 }

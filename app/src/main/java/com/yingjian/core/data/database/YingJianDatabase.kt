@@ -64,6 +64,7 @@ data class PhotobookEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val paperSize: String,
+    val coverImageUri: String? = null,
     val createdAt: Long,
     val updatedAt: Long
 )
@@ -84,6 +85,9 @@ interface PhotobookDao {
 
     @Query("SELECT * FROM photobook WHERE id = :id")
     suspend fun getById(id: Long): PhotobookEntity?
+
+    @Query("DELETE FROM photobook WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
 }
 
 // --- PageLayout Entity ---
@@ -115,10 +119,11 @@ interface PageLayoutDao {
 @TypeConverters(Converters::class)
 @androidx.room.Database(
     entities = [MemoryRecordEntity::class, PhotobookEntity::class, PageLayoutEntity::class],
-    version = 3,
+    version = 4,
     autoMigrations = [
         androidx.room.AutoMigration(from = 1, to = 2),
-        androidx.room.AutoMigration(from = 2, to = 3)
+        androidx.room.AutoMigration(from = 2, to = 3),
+        androidx.room.AutoMigration(from = 3, to = 4)
     ],
     exportSchema = true
 )
