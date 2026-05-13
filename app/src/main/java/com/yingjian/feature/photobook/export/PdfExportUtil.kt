@@ -58,8 +58,8 @@ object PdfExportUtil {
             val page = document.startPage(pageInfo)
             val canvas = page.canvas
 
-            // White background
-            canvas.drawColor(Color.WHITE)
+            // Paper background (#FAF9F6)
+            canvas.drawColor(0xFFFAF9F6.toInt())
 
             // Render elements sorted by zIndex
             val sortedElements = pageState.elements.sortedBy { it.zIndex }
