@@ -160,7 +160,53 @@ For each reference to old PaperSize values (A4, SIX_INCH_LANDSCAPE, etc.), repla
 
 - [ ] **Step 3: Simplify CreatePhotobookBottomSheet**
 
-In `PhotobookListScreen.kt`, remove paper size selection from the bottom sheet — keep only name input since there's only one size now.
+In `PhotobookListScreen.kt`, replace the bottom sheet — remove PaperSize parameter, keep only name input:
+
+```kotlin
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreatePhotobookBottomSheet(
+    onDismiss: () -> Unit,
+    onCreate: (String) -> Unit
+) {
+    var name by rememberSaveable { mutableStateOf("") }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Text(
+                "创建画册",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("画册名称") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                TextButton(
+                    onClick = { onCreate(name.takeIf { it.isNotBlank() } ?: "未命名画册") },
+                    enabled = name.isNotBlank()
+                ) { Text("下一步") }
+            }
+        }
+    }
+}
+```
 
 - [ ] **Step 4: Compile and verify**
 
@@ -659,6 +705,11 @@ fun PhotobookListScreen(
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
+                    },
+                    actions = {
+                        IconButton(onClick = { /* MVP: placeholder */ }) {
+                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                        }
                     }
                 )
             }
@@ -673,6 +724,30 @@ fun PhotobookListScreen(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(32.dp)
         ) {
+            // Section header
+            item(span = { GridItemSpan(2) }) {
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                    Text(
+                        "所有画册",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "共 ${viewModel.uiState.photobooks.size} 册",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // Ink divider
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                    )
+                }
+            }
+
             // "新建画册" card — first item (hidden in selection mode)
             if (!viewModel.uiState.isSelectionMode) {
                 item {
@@ -853,6 +928,7 @@ fun PhotobookEditorScreen(
 ) {
     var currentPage by remember { mutableIntStateOf(bookState.currentPage) }
     var isImageSelected by remember { mutableStateOf(false) }
+    var showCoverSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -864,7 +940,7 @@ fun PhotobookEditorScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onSetCover) {
+                    IconButton(onClick = { showCoverSheet = true }) {
                         Icon(Icons.Default.Style, contentDescription = "设为封面")
                     }
                     IconButton(onClick = onNavigateToPreview) {
@@ -997,6 +1073,46 @@ fun PhotobookEditorScreen(
             }
         }
     }
+
+    // Cover photo bottom sheet
+    if (showCoverSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showCoverSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "设为封面",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Text(
+                    "将当前页面的图片设为画册封面？",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { showCoverSheet = false }) {
+                        Text("取消")
+                    }
+                    TextButton(onClick = {
+                        onSetCover()
+                        showCoverSheet = false
+                    }) {
+                        Text("确认")
+                    }
+                }
+            }
+        }
+    }
 }
 ```
 
@@ -1014,7 +1130,7 @@ git commit -m "feat: replace HorizontalPager with AnimatedContent button-based p
 
 ---
 
-### Task 3.2: Update PhotobookCanvasPage with 285x210 canvas, page numbers, and printer text style
+### Task 3.2: Update PhotobookCanvasPage with 285x210 canvas, page numbers, date, and printer text style
 
 **Files:**
 - Modify: `app/src/main/java/com/yingjian/feature/photobook/PhotobookCanvasPage.kt`
@@ -1032,6 +1148,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -1052,6 +1169,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -1061,12 +1179,17 @@ import com.yingjian.feature.photobook.model.ImageElement
 import com.yingjian.feature.photobook.model.PageElement
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.TextElement
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
 fun PhotobookCanvasPage(
     pageState: PageState,
     containerWidthDp: Dp,
+    moodText: String? = null,     // Derived from ImageElement.memoryId lookup
+    memoryDate: Long? = null,     // Derived from ImageElement.memoryId lookup
     isSelected: Boolean = false,
     onSelect: () -> Unit = {},
     onDeselect: () -> Unit = {},
@@ -1112,6 +1235,9 @@ fun PhotobookCanvasPage(
                 .fillMaxSize()
                 .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
         ) {
+            // Format date from memory timestamp
+            val dateText = memoryDate?.let { formatDate(it) }
+
             pageState.elements.forEach { element ->
                 when (element) {
                     is ImageElement -> RenderImageElement(
@@ -1121,8 +1247,49 @@ fun PhotobookCanvasPage(
                     )
                     is TextElement -> RenderPrinterTextElement(
                         element = element,
-                        scaleFactor = scaleFactor
+                        scaleFactor = scaleFactor,
+                        dateText = dateText
                     )
+                }
+            }
+
+            // If no TextElement but moodText/date exist, render them below the image
+            if (moodText != null && pageState.elements.none { it is TextElement }) {
+                val imageEl = pageState.elements.filterIsInstance<ImageElement>().firstOrNull()
+                if (imageEl != null) {
+                    val yDp = ((imageEl.yMm + imageEl.heightMm + 8f) * scaleFactor)
+                    val xDp = ((imageEl.xMm + imageEl.widthMm / 2f) * scaleFactor)
+                    val widthDp = (imageEl.widthMm * scaleFactor)
+                    Column(
+                        modifier = Modifier
+                            .offset { IntOffset(xDp.roundToInt() - (widthDp / 2).dp.roundToPx(), yDp.roundToInt()) }
+                            .width(widthDp.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = moodText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraLight,
+                                letterSpacing = 0.2.em
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        if (dateText != null) {
+                            Text(
+                                text = dateText,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraLight,
+                                    letterSpacing = 0.1.em
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1192,22 +1359,48 @@ private fun RenderImageElement(
 @Composable
 private fun RenderPrinterTextElement(
     element: TextElement,
-    scaleFactor: Float
+    scaleFactor: Float,
+    dateText: String? = null  // Date from memory lookup
 ) {
     val xDp = (element.xMm * scaleFactor)
     val yDp = (element.yMm * scaleFactor)
+    val widthDp = (element.widthMm * scaleFactor)
 
-    Text(
-        text = element.text,
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontSize = 11.sp,
-            fontWeight = FontWeight.ExtraLight,
-            letterSpacing = 0.2.em
-        ),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.offset { IntOffset(xDp.roundToInt(), yDp.roundToInt()) }
-    )
+    Column(
+        modifier = Modifier
+            .offset { IntOffset(xDp.roundToInt(), yDp.roundToInt()) }
+            .width(widthDp.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = element.text,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraLight,
+                letterSpacing = 0.2.em
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        if (dateText != null) {
+            Text(
+                text = dateText,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.ExtraLight,
+                    letterSpacing = 0.1.em
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+    }
 }
+
+// Helper to format date from timestamp
+private fun formatDate(timestamp: Long): String =
+    SimpleDateFormat("yyyy.MM.dd", Locale.getDefault()).format(Date(timestamp))
 ```
 
 - [ ] **Step 2: Compile and verify**
@@ -1300,6 +1493,8 @@ PhotobookEditorScreen(
                     // Update photobook
                     deps.photobookRepository.updatePhotobook(currentState.photobook)
                 }
+                // Show snackbar feedback via LaunchedEffect
+                // (handled in editor screen via SnackbarHostState)
             }
         }
     },
@@ -1332,9 +1527,10 @@ PhotobookEditorScreen(
         loadedBookState?.let { state ->
             val currentPage = state.currentPage
             val page = state.pages.getOrNull(currentPage) ?: return@let
-            val updatedPage = page.copy(elements = emptyList())
+            val selectedIndex = state.selectedElementIndex ?: return@let
+            val updatedElements = page.elements.filterIndexed { i, _ -> i != selectedIndex }
             val updatedPages = state.pages.toMutableList()
-            if (updatedPage.elements.isEmpty()) {
+            if (updatedElements.isEmpty()) {
                 // Remove empty page and renumber
                 updatedPages.removeAt(currentPage)
                 val renumbered = updatedPages.mapIndexed { idx, p ->
@@ -1342,21 +1538,42 @@ PhotobookEditorScreen(
                 }
                 loadedBookState = state.copy(
                     pages = renumbered,
-                    currentPage = currentPage.coerceAtMost(renumbered.size - 1)
+                    currentPage = currentPage.coerceAtMost(renumbered.size - 1),
+                    selectedElementIndex = null
                 )
             } else {
-                updatedPages[currentPage] = updatedPage
-                loadedBookState = state.copy(pages = updatedPages)
+                updatedPages[currentPage] = page.copy(elements = updatedElements)
+                loadedBookState = state.copy(
+                    pages = updatedPages,
+                    selectedElementIndex = null
+                )
             }
         }
     },
     onResetImage = {
-        // Reset image to original position (re-create page from memory)
+        // Reset image by re-creating the page via AutoLayoutAlgorithm
         loadedBookState?.let { state ->
             val currentPage = state.currentPage
             val page = state.pages.getOrNull(currentPage) ?: return@let
             val imageEl = page.elements.filterIsInstance<ImageElement>().firstOrNull() ?: return@let
-            // Reset position: just keep the same elements (no position change needed)
+            coroutineScope.launch {
+                val memory = withContext(Dispatchers.IO) {
+                    deps.memoryRepository.getMemoryById(imageEl.memoryId)
+                }
+                if (memory != null) {
+                    val paperSize = runCatching {
+                        PaperSize.valueOf(state.photobook.paperSize)
+                    }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
+                    val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
+                        memory = memory,
+                        paperSize = paperSize,
+                        pageNumber = page.pageNumber
+                    )
+                    val updatedPages = state.pages.toMutableList()
+                    updatedPages[currentPage] = resetPage
+                    loadedBookState = state.copy(pages = updatedPages, selectedElementIndex = null)
+                }
+            }
         }
     }
 )
@@ -1427,9 +1644,6 @@ git commit -m "feat: add Preview route to NavDestinations"
 ```kotlin
 package com.yingjian.feature.photobook
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -1439,6 +1653,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1453,6 +1668,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.PageState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1532,9 +1748,12 @@ private fun PortraitSinglePageView(bookState: BookState) {
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val coroutineScope = rememberCoroutineScope()
             IconButton(onClick = {
                 if (pagerState.currentPage > 0) {
-                    // scroll to previous
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                    }
                 }
             }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Previous", tint = Color.White.copy(alpha = 0.6f))
@@ -1559,10 +1778,12 @@ private fun PortraitSinglePageView(bookState: BookState) {
 
             IconButton(onClick = {
                 if (pagerState.currentPage < bookState.pages.size - 1) {
-                    // scroll to next
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                    }
                 }
             }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Next", tint = Color.White.copy(alpha = 0.6f))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, "Next", tint = Color.White.copy(alpha = 0.6f))
             }
         }
     }
@@ -1651,13 +1872,24 @@ private fun LandscapeSpreadView(bookState: BookState) {
             }
         }
 
-        // Spread indicator
+        // Spread indicator with nav buttons
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val coroutineScope = rememberCoroutineScope()
             val spreadCount = (bookState.pages.size + 1) / 2
+            IconButton(onClick = {
+                if (pagerState.currentPage > 0) {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                    }
+                }
+            }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Previous", tint = Color.White.copy(alpha = 0.6f))
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 repeat(spreadCount) { index ->
                     Box(
@@ -1673,6 +1905,16 @@ private fun LandscapeSpreadView(bookState: BookState) {
                             )
                     )
                 }
+            }
+
+            IconButton(onClick = {
+                if (pagerState.currentPage < spreadCount - 1) {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                    }
+                }
+            }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, "Next", tint = Color.White.copy(alpha = 0.6f))
             }
         }
     }
@@ -1740,11 +1982,20 @@ composable(NavDestinations.Preview.route) { backStackEntry ->
             bookState = state,
             onBack = { navController.popBackStack() },
             onShare = {
-                // Generate PDF and share
+                // Generate PDF, save to cache, share via FileProvider
                 val bytes = PdfExportUtil.exportPdf(context, state)
+                val cacheDir = context.cacheDir
+                val shareFile = java.io.File(cacheDir, "photobook_${state.photobook.id}.pdf")
+                shareFile.writeBytes(bytes)
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    shareFile
+                )
                 val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "application/pdf"
-                    putExtra(android.content.Intent.EXTRA_STREAM, /* save to cache and get URI */)
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 context.startActivity(android.content.Intent.createChooser(shareIntent, "分享画册"))
             }
