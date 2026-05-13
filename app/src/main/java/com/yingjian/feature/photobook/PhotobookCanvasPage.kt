@@ -6,7 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,10 +64,10 @@ fun PhotobookCanvasPage(
     val pageAspect = pageState.trimWidthMm / pageState.trimHeightMm
     val scaleFactor = containerWidthDp.value / pageState.trimWidthMm
 
-    // Gesture state (px)
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
-    var scale by remember { mutableFloatStateOf(1f) }
+    // Gesture state (px) — keyed to page so each page starts fresh
+    var offsetX by remember(pageState.pageNumber) { mutableFloatStateOf(0f) }
+    var offsetY by remember(pageState.pageNumber) { mutableFloatStateOf(0f) }
+    var scale by remember(pageState.pageNumber) { mutableFloatStateOf(1f) }
 
     // Helper: convert mm-based offset + size to px
     fun mmToPx(mm: Float): Float = with(density) { (mm * scaleFactor).dp.toPx() }
@@ -84,12 +85,18 @@ fun PhotobookCanvasPage(
                     onDoubleTap = {
                         if (isSelected) {
                             onImageAdjusted(pxToMm(offsetX), pxToMm(offsetY), scale)
+                            offsetX = 0f
+                            offsetY = 0f
+                            scale = 1f
                             onDeselect()
                         } else onSelect()
                     },
                     onTap = {
                         if (isSelected) {
                             onImageAdjusted(pxToMm(offsetX), pxToMm(offsetY), scale)
+                            offsetX = 0f
+                            offsetY = 0f
+                            scale = 1f
                             onDeselect()
                         }
                     }
@@ -138,11 +145,12 @@ fun PhotobookCanvasPage(
                         val topPx = mmToPx(imageEl.yMm + imageEl.heightMm + 8f)
                         val widthDp = ((imageEl.widthMm * scaleFactor)).dp
 
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .offset { IntOffset(centerPx.roundToInt() - (widthDp / 2).roundToPx(), topPx.roundToInt()) }
                                 .width(widthDp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = moodText,
@@ -150,7 +158,7 @@ fun PhotobookCanvasPage(
                                 fontWeight = FontWeight.ExtraLight,
                                 letterSpacing = (0.2f * scaleFactor).sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Start
                             )
                             if (dateText != null) {
                                 Text(
@@ -159,8 +167,7 @@ fun PhotobookCanvasPage(
                                     fontWeight = FontWeight.ExtraLight,
                                     letterSpacing = (0.1f * scaleFactor).sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(top = (2f * scaleFactor).dp)
+                                    textAlign = TextAlign.End
                                 )
                             }
                         }
@@ -245,11 +252,12 @@ private fun RenderPrinterTextElement(
         val yPx = (element.yMm * scaleFactor).dp.roundToPx()
         val widthDp = ((element.widthMm * scaleFactor)).dp
 
-        Column(
+        Row(
             modifier = Modifier
                 .offset { IntOffset(xPx, yPx) }
                 .width(widthDp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = element.text,
@@ -257,7 +265,7 @@ private fun RenderPrinterTextElement(
                 fontWeight = FontWeight.ExtraLight,
                 letterSpacing = (0.2f * scaleFactor).sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Start
             )
             if (dateText != null) {
                 Text(
@@ -266,8 +274,7 @@ private fun RenderPrinterTextElement(
                     fontWeight = FontWeight.ExtraLight,
                     letterSpacing = (0.1f * scaleFactor).sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = (2f * scaleFactor).dp)
+                    textAlign = TextAlign.End
                 )
             }
         }

@@ -1,6 +1,7 @@
 package com.yingjian.core.ui.navigation
 
 import android.net.Uri
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -231,6 +232,14 @@ fun YingJianNavHost(
                     androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(9)
                 ) { pickedUris: List<Uri> ->
                     if (pickedUris.isNotEmpty()) {
+                        pickedUris.forEach { uri ->
+                            runCatching {
+                                context.contentResolver.takePersistableUriPermission(
+                                    uri,
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                )
+                            }
+                        }
                         val existing = memory?.let { m -> m.getAllImageUris().map { Uri.parse(it) } } ?: emptyList()
                         val allUris = existing + pickedUris
                         val imageUrisJson = Json.encodeToString(
@@ -258,6 +267,12 @@ fun YingJianNavHost(
                     androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
                 ) { uri: Uri? ->
                     uri?.let { pickedUri ->
+                        runCatching {
+                            context.contentResolver.takePersistableUriPermission(
+                                pickedUri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
                         val existing = memory?.let { m -> m.getAllImageUris().map { Uri.parse(it) } } ?: emptyList()
                         val allUris = existing + pickedUri
                         val imageUrisJson = Json.encodeToString(
@@ -425,14 +440,23 @@ fun YingJianNavHost(
                 LaunchedEffect(appendIdsStr) {
                     if (appendIdsStr != null) {
                         val ids = appendIdsStr.split(",").mapNotNull { it.toLongOrNull() }
-                        viewModel.appendPhotosToBook(ids)
+                        if (ids.isNotEmpty()) {
+                            // Call VM to append, then directly sync loadedBookState
+                            viewModel.appendPhotosToBook(ids)
+                            // Wait a frame for VM state to update, then sync
+                            // Read the latest VM state directly
+                            val vmState = viewModel.uiState.currentBookState
+                            if (vmState != null && vmState.photobook.id == photobookId) {
+                                loadedBookState = vmState
+                            }
+                        }
                         backStackEntry.savedStateHandle.remove<String>("appendMemoryIds")
                     }
                 }
 
                 // Sync loadedBookState when ViewModel's state changes (e.g., after append completes)
                 val vmCurrentState = viewModel.uiState.currentBookState
-                LaunchedEffect(vmCurrentState) {
+                LaunchedEffect(vmCurrentState?.pages?.size, vmCurrentState?.photobook?.id) {
                     if (vmCurrentState != null && vmCurrentState.photobook.id == photobookId
                         && vmCurrentState.pages.size != loadedBookState?.pages?.size) {
                         loadedBookState = vmCurrentState
@@ -531,7 +555,8 @@ fun YingJianNavHost(
                                     val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
                                         memory = memory,
                                         paperSize = paperSize,
-                                        pageNumber = page.pageNumber
+                                        pageNumber = page.pageNumber,
+                                        imageUri = imageEl.imageUri
                                     )
                                     val updatedPages = state.pages.toMutableList()
                                     updatedPages[cp] = resetPage

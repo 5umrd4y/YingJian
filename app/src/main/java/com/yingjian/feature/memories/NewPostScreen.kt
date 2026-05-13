@@ -2,6 +2,7 @@ package com.yingjian.feature.memories
 
 import android.net.Uri
 import android.os.Build
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -85,6 +86,12 @@ fun NewPostScreen(
         ActivityResultContracts.PickMultipleVisualMedia(9)
     ) { pickedUris: List<Uri> ->
         for (pickedUri in pickedUris) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    pickedUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             val (_, _, dateMs) = getImageMetadata(context, pickedUri)
             uris.add(pickedUri)
             dates.add(dateMs)
@@ -95,6 +102,12 @@ fun NewPostScreen(
         ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let { pickedUri ->
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    pickedUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             val (_, _, dateMs) = getImageMetadata(context, pickedUri)
             uris.add(pickedUri)
             dates.add(dateMs)

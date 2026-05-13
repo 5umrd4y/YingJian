@@ -3,6 +3,7 @@ package com.yingjian.feature.memories
 import android.net.Uri
 import android.os.Build
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.ExifInterface
 import android.provider.MediaStore
@@ -48,6 +49,15 @@ fun MemoriesScreen(
         ActivityResultContracts.PickMultipleVisualMedia(9)
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
+            // Persist URI permissions so images survive app restart
+            uris.forEach { uri ->
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+            }
             val dates = uris.map { uri -> getImageMetadata(context, uri).third }
             onNavigateToNewPost(uris, dates)
         }
@@ -57,6 +67,12 @@ fun MemoriesScreen(
         ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let { pickedUri ->
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    pickedUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             val (_, _, dateMs) = getImageMetadata(context, pickedUri)
             onNavigateToNewPost(listOf(pickedUri), listOf(dateMs))
         }

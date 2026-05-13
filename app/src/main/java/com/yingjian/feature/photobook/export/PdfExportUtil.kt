@@ -32,6 +32,7 @@ object PdfExportUtil {
     private const val DPI = 300
     private const val CROP_MARK_LENGTH_MM = 5f
     private const val CROP_MARK_STROKE_PT = 0.25f
+    private const val PAGE_NUMBER_MARGIN_MM = 12f
 
     // PDF text color synced with design system onSurfaceVariant (#4c463e)
     private const val PDF_TEXT_COLOR = 0xFF4c463e.toInt()
@@ -72,6 +73,9 @@ object PdfExportUtil {
 
             // Crop marks
             drawCropMarks(canvas, pageWidthPx, pageHeightPx)
+
+            // Page number (bottom-right, matching editor display)
+            drawPageNumber(canvas, pageState.pageNumber, pageWidthPx, pageHeightPx)
 
             document.finishPage(page)
         }
@@ -233,5 +237,25 @@ object PdfExportUtil {
             pageWidthPx.toFloat(), pageHeightPx.toFloat(),
             pageWidthPx.toFloat(), pageHeightPx - cropPx, paint
         )
+    }
+
+    private fun drawPageNumber(
+        canvas: Canvas,
+        pageNumber: Int,
+        pageWidthPx: Int,
+        pageHeightPx: Int
+    ) {
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 11f * DPI / 25.4f
+            color = 0xFF9E9E9E.toInt() // outlineVariant-like gray
+            textAlign = Paint.Align.RIGHT
+            typeface = Typeface.DEFAULT
+        }
+
+        val text = "$pageNumber"
+        val x = pageWidthPx.toFloat() - mmToPxFloat(PAGE_NUMBER_MARGIN_MM)
+        val y = pageHeightPx.toFloat() - mmToPxFloat(PAGE_NUMBER_MARGIN_MM)
+
+        canvas.drawText(text, x, y, paint)
     }
 }
