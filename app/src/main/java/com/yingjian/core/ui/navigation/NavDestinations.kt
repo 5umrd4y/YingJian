@@ -14,4 +14,7 @@ sealed class NavDestinations(val route: String) {
     data object PhotobookEditor : NavDestinations("photobook_editor/{photobookId}") {
         fun createRoute(photobookId: Long) = "photobook_editor/$photobookId"
     }
+    data object Preview : NavDestinations("photobook_preview/{photobookId}") {
+        fun createRoute(photobookId: Long) = "photobook_preview/$photobookId"
+    }
 }

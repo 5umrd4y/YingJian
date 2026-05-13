@@ -29,7 +29,9 @@ import com.yingjian.feature.photobook.PhotobookEditorScreen
 import com.yingjian.feature.photobook.PhotobookScreen
 import com.yingjian.feature.photobook.PhotobookViewModel
 import com.yingjian.feature.photobook.export.PdfExportUtil
+import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.ImageElement
 import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
@@ -381,6 +383,18 @@ fun YingJianNavHost(
             val coroutineScope = rememberCoroutineScope()
 
             loadedBookState?.let { bookState ->
+                // Load mood/date from memory for current page
+                val currentPageState = bookState.pages.getOrNull(bookState.currentPage)
+                val currentImageElement = currentPageState?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
+                val currentMemory by produceState<MemoryRecordEntity?>(
+                    initialValue = null,
+                    currentImageElement?.memoryId
+                ) {
+                    value = currentImageElement?.memoryId?.let { memoryId ->
+                        withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(memoryId) }
+                    }
+                }
+
                 PhotobookEditorScreen(
                     bookState = bookState,
                     onUpdateState = { loadedBookState = it },
@@ -390,6 +404,7 @@ fun YingJianNavHost(
                         if (currentState != null) {
                             coroutineScope.launch {
                                 withContext(Dispatchers.IO) {
+                                    deps.photobookRepository.deletePageLayouts(currentState.photobook.id)
                                     currentState.pages.forEach { page ->
                                         deps.photobookRepository.savePageLayout(
                                             PageLayoutEntity(
@@ -400,6 +415,7 @@ fun YingJianNavHost(
                                             )
                                         )
                                     }
+                                    deps.photobookRepository.updatePhotobook(currentState.photobook)
                                 }
                             }
                         }
@@ -408,15 +424,83 @@ fun YingJianNavHost(
                         pdfBytesState.value = PdfExportUtil.exportPdf(context, bookState)
                         createPdf.launch("photobook.pdf")
                     },
-                    onNavigateToPreview = { /* TODO */ },
-                    onAddPhotos = { /* TODO */ },
-                    onSetCover = { /* TODO */ },
-                    onDeleteImage = { /* TODO */ },
-                    onResetImage = { /* TODO */ }
+                    onNavigateToPreview = {
+                        navController.navigate(NavDestinations.Preview.createRoute(bookState.photobook.id))
+                    },
+                    onAddPhotos = {
+                        navController.currentBackStackEntry?.savedStateHandle?.set("appendMode", "true")
+                        navController.currentBackStackEntry?.savedStateHandle?.set("editorPhotobookId", bookState.photobook.id.toString())
+                        navController.navigate(NavDestinations.PhotoPicker.route)
+                    },
+                    onSetCover = {
+                        val currentPage = loadedBookState?.currentPage ?: 0
+                        val imageElement = loadedBookState?.pages?.getOrNull(currentPage)
+                            ?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
+                        imageElement?.let {
+                            loadedBookState = loadedBookState?.copy(
+                                photobook = loadedBookState!!.photobook.copy(
+                                    coverImageUri = it.imageUri,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                    },
+                    onDeleteImage = {
+                        loadedBookState?.let { state ->
+                            val cp = state.currentPage
+                            val page = state.pages.getOrNull(cp) ?: return@let
+                            val updatedElements = page.elements.filterNot { it is ImageElement }
+                            val updatedPages = state.pages.toMutableList()
+                            if (updatedElements.isEmpty()) {
+                                updatedPages.removeAt(cp)
+                                val renumbered = updatedPages.mapIndexed { idx, p ->
+                                    p.copy(pageNumber = idx + 1)
+                                }
+                                loadedBookState = state.copy(
+                                    pages = renumbered,
+                                    currentPage = cp.coerceAtMost((renumbered.size - 1).coerceAtLeast(0))
+                                )
+                            } else {
+                                updatedPages[cp] = page.copy(elements = updatedElements)
+                                loadedBookState = state.copy(pages = updatedPages)
+                            }
+                        }
+                    },
+                    onResetImage = {
+                        loadedBookState?.let { state ->
+                            val cp = state.currentPage
+                            val page = state.pages.getOrNull(cp) ?: return@let
+                            val imageEl = page.elements.filterIsInstance<ImageElement>().firstOrNull() ?: return@let
+                            coroutineScope.launch {
+                                val memory = withContext(Dispatchers.IO) {
+                                    deps.memoryRepository.getMemoryById(imageEl.memoryId)
+                                }
+                                if (memory != null) {
+                                    val paperSize = runCatching {
+                                        PaperSize.valueOf(state.photobook.paperSize)
+                                    }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
+                                    val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
+                                        memory = memory,
+                                        paperSize = paperSize,
+                                        pageNumber = page.pageNumber
+                                    )
+                                    val updatedPages = state.pages.toMutableList()
+                                    updatedPages[cp] = resetPage
+                                    loadedBookState = state.copy(pages = updatedPages)
+                                }
+                            }
+                        }
+                    },
+                    pageMoodText = currentMemory?.moodText,
+                    pageMemoryDate = currentMemory?.timestamp
                 )
             } ?: run {
                 androidx.compose.material3.Text("Loading...")
             }
+        }
+        composable(NavDestinations.Preview.route) { backStackEntry ->
+            val photobookId = backStackEntry.arguments?.getString("photobookId")?.toLongOrNull()
+            androidx.compose.material3.Text("Preview: $photobookId")
         }
     }
 }
