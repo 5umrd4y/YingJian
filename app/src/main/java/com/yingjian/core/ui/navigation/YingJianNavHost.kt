@@ -26,6 +26,7 @@ import com.yingjian.feature.memories.getImageMetadata
 import com.yingjian.feature.memories.getAllImageUris
 import com.yingjian.feature.photobook.PhotoPickerScreen
 import com.yingjian.feature.photobook.PhotobookEditorScreen
+import com.yingjian.feature.photobook.PhotobookPreviewScreen
 import com.yingjian.feature.photobook.PhotobookScreen
 import com.yingjian.feature.photobook.PhotobookViewModel
 import com.yingjian.feature.photobook.export.PdfExportUtil
@@ -500,7 +501,68 @@ fun YingJianNavHost(
         }
         composable(NavDestinations.Preview.route) { backStackEntry ->
             val photobookId = backStackEntry.arguments?.getString("photobookId")?.toLongOrNull()
-            androidx.compose.material3.Text("Preview: $photobookId")
+
+            var loadedBookState by remember { mutableStateOf<BookState?>(null) }
+
+            LaunchedEffect(photobookId) {
+                if (photobookId != null) {
+                    val photobook = withContext(Dispatchers.IO) {
+                        deps.photobookRepository.getPhotobookById(photobookId)
+                    }
+                    if (photobook != null) {
+                        val pageLayouts = withContext(Dispatchers.IO) {
+                            deps.photobookRepository.getPageLayouts(photobookId)
+                        }
+                        val pages = pageLayouts.map { layout ->
+                            val elements = try {
+                                ElementSerializer.deserialize(layout.elementsJson)
+                            } catch (e: Exception) {
+                                emptyList()
+                            }
+                            PageState(
+                                pageNumber = layout.pageNumber,
+                                elements = elements,
+                                trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
+                                trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
+                            )
+                        }
+                        loadedBookState = BookState(
+                            photobook = photobook,
+                            pages = pages,
+                            currentPage = 0,
+                            mode = LayoutMode.MANUAL
+                        )
+                    }
+                }
+            }
+
+            val context = LocalContext.current
+
+            loadedBookState?.let { state ->
+                PhotobookPreviewScreen(
+                    bookState = state,
+                    onBack = { navController.popBackStack() },
+                    onShare = {
+                        val bytes = PdfExportUtil.exportPdf(context, state)
+                        val cacheDir = context.cacheDir
+                        val shareFile = java.io.File(cacheDir, "photobook_${state.photobook.id}.pdf")
+                        shareFile.writeBytes(bytes)
+                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            shareFile
+                        )
+                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "application/pdf"
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(shareIntent, "分享画册"))
+                    }
+                )
+            } ?: run {
+                androidx.compose.material3.CircularProgressIndicator()
+            }
         }
     }
 }
