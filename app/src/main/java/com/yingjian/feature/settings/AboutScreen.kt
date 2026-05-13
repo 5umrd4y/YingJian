@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 private val VERSION_HISTORY = listOf(
+    VersionEntry("1.0.2", "2026-05-13", "画册模块全面升级：285x210横版纸质封面、选择删除、手势编辑、翻页预览"),
     VersionEntry("1.0.1", "2026-05-12", "优化标签添加按钮和输入框布局对齐"),
     VersionEntry("1.0.0", "2026-05-10", "初始版本，支持影记、画册、设置功能")
 )
