@@ -91,6 +91,8 @@ class PhotobookViewModel(
                 currentBookState = bookState,
                 isLoading = false
             )
+            // Refresh the list so the new photobook appears
+            loadPhotobooks()
         }
     }
 

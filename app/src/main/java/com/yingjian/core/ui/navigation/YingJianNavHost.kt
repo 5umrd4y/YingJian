@@ -125,6 +125,19 @@ fun YingJianNavHost(
                         selectedMemoryIds = ids
                     )
                     backStackEntry.savedStateHandle.remove<String>("selectedMemoryIds")
+                    backStackEntry.savedStateHandle.set("createdBook", "true")
+                }
+            }
+
+            // Auto-navigate to editor after creation completes
+            val createdBook = viewModel.uiState.currentBookState
+            val shouldNavigate = backStackEntry.savedStateHandle.get<String>("createdBook")
+            LaunchedEffect(createdBook, shouldNavigate) {
+                if (createdBook != null && shouldNavigate == "true") {
+                    backStackEntry.savedStateHandle.remove<String>("createdBook")
+                    navController.navigate(
+                        NavDestinations.PhotobookEditor.createRoute(createdBook.photobook.id)
+                    )
                 }
             }
 
@@ -314,14 +327,22 @@ fun YingJianNavHost(
         }
         composable(NavDestinations.PhotoPicker.route) { backStackEntry ->
             val allMemories = rememberLoadedMemories(deps.memoryRepository)
+            val isAppendMode = backStackEntry.savedStateHandle.get<String>("appendMode") == "true"
 
             PhotoPickerScreen(
                 memories = allMemories,
                 onBack = { navController.popBackStack() },
                 onComplete = { selectedIds ->
+                    val idsJson = selectedIds.map { it.toString() }.joinToString(",")
                     navController.previousBackStackEntry?.savedStateHandle?.apply {
-                        set("selectedMemoryIds", selectedIds.map { it.toString() }.joinToString(","))
+                        if (isAppendMode) {
+                            set("appendMemoryIds", idsJson)
+                        } else {
+                            set("selectedMemoryIds", idsJson)
+                        }
                     }
+                    backStackEntry.savedStateHandle.remove<String>("appendMode")
+                    backStackEntry.savedStateHandle.remove<String>("editorPhotobookId")
                     navController.popBackStack()
                 }
             )
@@ -393,6 +414,42 @@ fun YingJianNavHost(
                 ) {
                     value = currentImageElement?.memoryId?.let { memoryId ->
                         withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(memoryId) }
+                    }
+                }
+
+                // Handle append mode: when returning from PhotoPicker with new photos
+                val appendIdsStr = backStackEntry.savedStateHandle.get<String>("appendMemoryIds")
+                LaunchedEffect(appendIdsStr) {
+                    if (appendIdsStr != null) {
+                        val ids = appendIdsStr.split(",").mapNotNull { it.toLongOrNull() }
+                        viewModel.appendPhotosToBook(ids)
+                        backStackEntry.savedStateHandle.remove<String>("appendMemoryIds")
+                        // Refresh book state from repository
+                        val photobook = withContext(Dispatchers.IO) {
+                            deps.photobookRepository.getPhotobookById(bookState.photobook.id)
+                        }
+                        if (photobook != null) {
+                            val pageLayouts = withContext(Dispatchers.IO) {
+                                deps.photobookRepository.getPageLayouts(photobook.id)
+                            }
+                            val refreshedPages = pageLayouts.map { layout ->
+                                val elements = try {
+                                    ElementSerializer.deserialize(layout.elementsJson)
+                                } catch (e: Exception) { emptyList() }
+                                PageState(
+                                    pageNumber = layout.pageNumber,
+                                    elements = elements,
+                                    trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
+                                    trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
+                                )
+                            }
+                            loadedBookState = BookState(
+                                photobook = photobook,
+                                pages = refreshedPages,
+                                currentPage = refreshedPages.size - 1,
+                                mode = LayoutMode.MANUAL
+                            )
+                        }
                     }
                 }
 
