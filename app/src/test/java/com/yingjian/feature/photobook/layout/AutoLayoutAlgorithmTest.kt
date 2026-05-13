@@ -17,9 +17,9 @@ class AutoLayoutAlgorithmTest {
             testMemory(id = 2, width = 800, height = 1200),
             testMemory(id = 3, width = 1000, height = 1000)
         )
-        val photobook = PhotobookEntity(name = "Test", paperSize = "A4", createdAt = 0, updatedAt = 0)
+        val photobook = PhotobookEntity(name = "Test", paperSize = "TWELVE_INCH_LANDSCAPE", createdAt = 0, updatedAt = 0)
 
-        val result = AutoLayoutAlgorithm.layout(memories, PaperSize.A4, photobook)
+        val result = AutoLayoutAlgorithm.layout(memories, PaperSize.TWELVE_INCH_LANDSCAPE, photobook)
 
         assertEquals(3, result.pages.size)
     }
@@ -27,13 +27,13 @@ class AutoLayoutAlgorithmTest {
     @Test
     fun `image fits within A4 safe area`() {
         val memories = listOf(testMemory(id = 1, width = 4000, height = 3000))
-        val photobook = PhotobookEntity(name = "Test", paperSize = "A4", createdAt = 0, updatedAt = 0)
+        val photobook = PhotobookEntity(name = "Test", paperSize = "TWELVE_INCH_LANDSCAPE", createdAt = 0, updatedAt = 0)
 
-        val result = AutoLayoutAlgorithm.layout(memories, PaperSize.A4, photobook)
+        val result = AutoLayoutAlgorithm.layout(memories, PaperSize.TWELVE_INCH_LANDSCAPE, photobook)
 
         val page = result.pages.first()
-        val safeWidth = PaperSize.A4.widthMm - 6f // 3mm bleed each side
-        val safeHeight = PaperSize.A4.heightMm - 6f
+        val safeWidth = PaperSize.TWELVE_INCH_LANDSCAPE.widthMm - 6f // 3mm bleed each side
+        val safeHeight = PaperSize.TWELVE_INCH_LANDSCAPE.heightMm - 6f
 
         val image = page.elements.first() as ImageElement
         assertTrue("Image width ${image.widthMm} exceeds safe $safeWidth", image.widthMm <= safeWidth + 0.1f)
@@ -43,9 +43,9 @@ class AutoLayoutAlgorithmTest {
     @Test
     fun `landscape photo maintains aspect ratio`() {
         val memories = listOf(testMemory(id = 1, width = 1200, height = 800)) // 3:2
-        val photobook = PhotobookEntity(name = "Test", paperSize = "A4", createdAt = 0, updatedAt = 0)
+        val photobook = PhotobookEntity(name = "Test", paperSize = "TWELVE_INCH_LANDSCAPE", createdAt = 0, updatedAt = 0)
 
-        val result = AutoLayoutAlgorithm.layout(memories, PaperSize.A4, photobook)
+        val result = AutoLayoutAlgorithm.layout(memories, PaperSize.TWELVE_INCH_LANDSCAPE, photobook)
         val image = result.pages.first().elements.first() as ImageElement
 
         val expectedRatio = 1200f / 800f

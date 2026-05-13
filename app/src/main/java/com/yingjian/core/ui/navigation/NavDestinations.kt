@@ -14,15 +14,4 @@ sealed class NavDestinations(val route: String) {
     data object PhotobookEditor : NavDestinations("photobook_editor/{photobookId}") {
         fun createRoute(photobookId: Long) = "photobook_editor/$photobookId"
     }
-
-    object PhotoPickerNav {
-        fun navigate(navController: androidx.navigation.NavHostController, paperSize: String) {
-            navController.currentBackStackEntry?.savedStateHandle?.set("paperSize", paperSize)
-            navController.navigate(Photobook.route)
-        }
-
-        fun getPaperSize(backStackEntry: androidx.navigation.NavBackStackEntry): String? {
-            return backStackEntry.savedStateHandle.get<String>("paperSize")
-        }
-    }
 }
