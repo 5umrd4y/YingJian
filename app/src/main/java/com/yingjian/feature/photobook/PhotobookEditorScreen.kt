@@ -133,6 +133,11 @@ fun PhotobookEditorScreen(
                     PhotobookCanvasPage(
                         pageState = currentPageState,
                         containerWidthDp = 300.dp,
+                        moodText = pageMoodText,
+                        memoryDate = pageMemoryDate,
+                        isSelected = isImageSelected,
+                        onSelect = { isImageSelected = true },
+                        onDeselect = { isImageSelected = false },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(16.dp)
