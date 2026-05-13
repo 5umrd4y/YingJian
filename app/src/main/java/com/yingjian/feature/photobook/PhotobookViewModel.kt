@@ -24,7 +24,8 @@ data class PhotobookUiState(
     val photobooks: List<PhotobookEntity> = emptyList(),
     val currentBookState: BookState? = null,
     val isLoading: Boolean = false,
-    val isAutoLayouting: Boolean = false
+    val isSelectionMode: Boolean = false,
+    val selectedIds: Set<Long> = emptySet()
 )
 
 class PhotobookViewModel(
@@ -147,6 +148,84 @@ class PhotobookViewModel(
             }
             loadPhotobooks()
         }
+    }
+
+    fun enterSelectionMode(id: Long) {
+        uiState = uiState.copy(
+            isSelectionMode = true,
+            selectedIds = setOf(id)
+        )
+    }
+
+    fun exitSelectionMode() {
+        uiState = uiState.copy(
+            isSelectionMode = false,
+            selectedIds = emptySet()
+        )
+    }
+
+    fun toggleSelection(id: Long) {
+        val current = uiState.selectedIds
+        val updated = if (id in current) current - id else current + id
+        if (updated.isEmpty()) {
+            exitSelectionMode()
+        } else {
+            uiState = uiState.copy(selectedIds = updated)
+        }
+    }
+
+    fun deletePhotobooks(ids: List<Long>) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                photobookRepository.deletePhotobooks(ids)
+            }
+            exitSelectionMode()
+            loadPhotobooks()
+        }
+    }
+
+    fun appendPhotosToBook(memoryIds: List<Long>) {
+        viewModelScope.launch {
+            val currentState = uiState.currentBookState ?: return@launch
+            uiState = uiState.copy(isLoading = true)
+
+            val memories = withContext(Dispatchers.IO) {
+                memoryRepository.getMemoriesByIds(memoryIds)
+            }
+
+            val paperSize = runCatching {
+                PaperSize.valueOf(currentState.photobook.paperSize)
+            }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
+
+            val startPageNumber = currentState.pages.size + 1
+            val newPages = memories.mapIndexed { index, memory ->
+                AutoLayoutAlgorithm.createSinglePhotoPage(
+                    memory = memory,
+                    paperSize = paperSize,
+                    pageNumber = startPageNumber + index
+                )
+            }
+
+            val updatedState = currentState.copy(
+                pages = currentState.pages + newPages,
+                currentPage = currentState.pages.size
+            )
+            uiState = uiState.copy(
+                currentBookState = updatedState,
+                isLoading = false
+            )
+        }
+    }
+
+    fun setCoverImage(uri: String) {
+        val currentState = uiState.currentBookState ?: return
+        val updatedPhotobook = currentState.photobook.copy(
+            coverImageUri = uri,
+            updatedAt = System.currentTimeMillis()
+        )
+        uiState = uiState.copy(
+            currentBookState = currentState.copy(photobook = updatedPhotobook)
+        )
     }
 
     companion object {
