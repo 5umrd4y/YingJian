@@ -21,3 +21,5 @@ val SurfaceVariant = Color(0xFFe4e2df)
 val Error = Color(0xFFba1a1a)
 val OnError = Color(0xFFffffff)
 val ErrorContainer = Color(0xFFffdad6)
+
+val PaperTexture = Color(0xFFA49A8E)
