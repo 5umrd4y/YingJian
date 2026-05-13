@@ -408,7 +408,11 @@ fun YingJianNavHost(
                         pdfBytesState.value = PdfExportUtil.exportPdf(context, bookState)
                         createPdf.launch("photobook.pdf")
                     },
-                    onUndo = { /* MVP: no-op */ }
+                    onNavigateToPreview = { /* TODO */ },
+                    onAddPhotos = { /* TODO */ },
+                    onSetCover = { /* TODO */ },
+                    onDeleteImage = { /* TODO */ },
+                    onResetImage = { /* TODO */ }
                 )
             } ?: run {
                 androidx.compose.material3.Text("Loading...")
