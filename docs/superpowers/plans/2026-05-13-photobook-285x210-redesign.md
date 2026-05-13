@@ -933,6 +933,7 @@ fun PhotobookEditorScreen(
     var isImageSelected by remember { mutableStateOf(false) }
     var showCoverSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -955,7 +956,6 @@ fun PhotobookEditorScreen(
                         Icon(Icons.Default.PictureAsPdf, contentDescription = "导出PDF")
                     }
                     IconButton(onClick = {
-                        val coroutineScope = rememberCoroutineScope()
                         onSave()
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar("已保存")
