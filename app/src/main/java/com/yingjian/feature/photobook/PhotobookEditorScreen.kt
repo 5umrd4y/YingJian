@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.ImageElement
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,6 +139,23 @@ fun PhotobookEditorScreen(
                         isSelected = isImageSelected,
                         onSelect = { isImageSelected = true },
                         onDeselect = { isImageSelected = false },
+                        onImageAdjusted = { dxMm, dyMm, scaleChange ->
+                            val imageEl = currentPageState.elements.filterIsInstance<ImageElement>().firstOrNull() ?: return@PhotobookCanvasPage
+                            val updatedElements = currentPageState.elements.map { element ->
+                                if (element is ImageElement && element.memoryId == imageEl.memoryId) {
+                                    element.copy(
+                                        xMm = element.xMm + dxMm,
+                                        yMm = element.yMm + dyMm,
+                                        widthMm = element.widthMm * scaleChange,
+                                        heightMm = element.heightMm * scaleChange
+                                    )
+                                } else element
+                            }
+                            val updatedPage = currentPageState.copy(elements = updatedElements)
+                            val updatedPages = bookState.pages.toMutableList()
+                            updatedPages[pageIndex] = updatedPage
+                            onUpdateState(bookState.copy(pages = updatedPages, currentPage = pageIndex))
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(16.dp)

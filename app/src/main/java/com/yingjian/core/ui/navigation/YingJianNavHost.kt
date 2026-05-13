@@ -427,32 +427,15 @@ fun YingJianNavHost(
                         val ids = appendIdsStr.split(",").mapNotNull { it.toLongOrNull() }
                         viewModel.appendPhotosToBook(ids)
                         backStackEntry.savedStateHandle.remove<String>("appendMemoryIds")
-                        // Refresh book state from repository
-                        val photobook = withContext(Dispatchers.IO) {
-                            deps.photobookRepository.getPhotobookById(bookState.photobook.id)
-                        }
-                        if (photobook != null) {
-                            val pageLayouts = withContext(Dispatchers.IO) {
-                                deps.photobookRepository.getPageLayouts(photobook.id)
-                            }
-                            val refreshedPages = pageLayouts.map { layout ->
-                                val elements = try {
-                                    ElementSerializer.deserialize(layout.elementsJson)
-                                } catch (e: Exception) { emptyList() }
-                                PageState(
-                                    pageNumber = layout.pageNumber,
-                                    elements = elements,
-                                    trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
-                                    trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
-                                )
-                            }
-                            loadedBookState = BookState(
-                                photobook = photobook,
-                                pages = refreshedPages,
-                                currentPage = refreshedPages.size - 1,
-                                mode = LayoutMode.MANUAL
-                            )
-                        }
+                    }
+                }
+
+                // Sync loadedBookState when ViewModel's state changes (e.g., after append completes)
+                val vmCurrentState = viewModel.uiState.currentBookState
+                LaunchedEffect(vmCurrentState) {
+                    if (vmCurrentState != null && vmCurrentState.photobook.id == photobookId
+                        && vmCurrentState.pages.size != loadedBookState?.pages?.size) {
+                        loadedBookState = vmCurrentState
                     }
                 }
 

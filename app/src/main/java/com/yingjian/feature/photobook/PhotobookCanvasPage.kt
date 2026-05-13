@@ -56,6 +56,7 @@ fun PhotobookCanvasPage(
     isSelected: Boolean = false,
     onSelect: () -> Unit = {},
     onDeselect: () -> Unit = {},
+    onImageAdjusted: (dxMm: Float, dyMm: Float, scaleChange: Float) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -69,6 +70,7 @@ fun PhotobookCanvasPage(
 
     // Helper: convert mm-based offset + size to px
     fun mmToPx(mm: Float): Float = with(density) { (mm * scaleFactor).dp.toPx() }
+    fun pxToMm(px: Float): Float = with(density) { px / scaleFactor / density.density }
 
     Box(
         modifier = modifier
@@ -80,10 +82,16 @@ fun PhotobookCanvasPage(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = {
-                        if (isSelected) onDeselect() else onSelect()
+                        if (isSelected) {
+                            onImageAdjusted(pxToMm(offsetX), pxToMm(offsetY), scale)
+                            onDeselect()
+                        } else onSelect()
                     },
                     onTap = {
-                        if (isSelected) onDeselect()
+                        if (isSelected) {
+                            onImageAdjusted(pxToMm(offsetX), pxToMm(offsetY), scale)
+                            onDeselect()
+                        }
                     }
                 )
             }
