@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -422,49 +423,52 @@ fun YingJianNavHost(
             }
             val coroutineScope = rememberCoroutineScope()
 
-            loadedBookState?.let { bookState ->
-                // Load mood/date from memory for current page
-                val currentPageState = bookState.pages.getOrNull(bookState.currentPage)
-                val currentImageElement = currentPageState?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
-                val currentMemory by produceState<MemoryRecordEntity?>(
-                    initialValue = null,
-                    currentImageElement?.memoryId
-                ) {
-                    value = currentImageElement?.memoryId?.let { memoryId ->
-                        withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(memoryId) }
-                    }
-                }
+            // Extract currentPage outside let so key() can wrap the mood lookup properly
+            val theBookState = loadedBookState
+            val currentPage = theBookState?.currentPage ?: 0
 
-                // Handle append mode: when returning from PhotoPicker with new photos
-                val appendIdsStr = backStackEntry.savedStateHandle.get<String>("appendMemoryIds")
-                LaunchedEffect(appendIdsStr) {
-                    if (appendIdsStr != null) {
-                        val ids = appendIdsStr.split(",").mapNotNull { it.toLongOrNull() }
-                        if (ids.isNotEmpty()) {
-                            // Call VM to append, then directly sync loadedBookState
-                            viewModel.appendPhotosToBook(ids)
-                            // Wait a frame for VM state to update, then sync
-                            // Read the latest VM state directly
-                            val vmState = viewModel.uiState.currentBookState
-                            if (vmState != null && vmState.photobook.id == photobookId) {
-                                loadedBookState = vmState
-                            }
+            if (theBookState != null) {
+                // Load mood/date from memory for current page — keyed to page index
+                // to force recreation when switching pages (AnimatedContent preserves compositions)
+                key(currentPage) {
+                    val currentPageState = theBookState.pages.getOrNull(currentPage)
+                    val currentImageElement = currentPageState?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
+                    val currentMemory by produceState<MemoryRecordEntity?>(
+                        initialValue = null,
+                        currentImageElement?.memoryId
+                    ) {
+                        value = currentImageElement?.memoryId?.let { memoryId ->
+                            withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(memoryId) }
                         }
-                        backStackEntry.savedStateHandle.remove<String>("appendMemoryIds")
                     }
-                }
 
-                // Sync loadedBookState when ViewModel's state changes (e.g., after append completes)
-                val vmCurrentState = viewModel.uiState.currentBookState
-                LaunchedEffect(vmCurrentState?.pages?.size, vmCurrentState?.photobook?.id) {
-                    if (vmCurrentState != null && vmCurrentState.photobook.id == photobookId
-                        && vmCurrentState.pages.size != loadedBookState?.pages?.size) {
-                        loadedBookState = vmCurrentState
+                    // Handle append mode: when returning from PhotoPicker with new photos
+                    val appendIdsStr = backStackEntry.savedStateHandle.get<String>("appendMemoryIds")
+                    LaunchedEffect(appendIdsStr) {
+                        if (appendIdsStr != null) {
+                            val ids = appendIdsStr.split(",").mapNotNull { it.toLongOrNull() }
+                            if (ids.isNotEmpty()) {
+                                viewModel.appendPhotosToBook(ids)
+                                val vmState = viewModel.uiState.currentBookState
+                                if (vmState != null && vmState.photobook.id == photobookId) {
+                                    loadedBookState = vmState
+                                }
+                            }
+                            backStackEntry.savedStateHandle.remove<String>("appendMemoryIds")
+                        }
                     }
-                }
 
-                PhotobookEditorScreen(
-                    bookState = bookState,
+                    // Sync loadedBookState when ViewModel's state changes
+                    val vmCurrentState = viewModel.uiState.currentBookState
+                    LaunchedEffect(vmCurrentState?.pages?.size, vmCurrentState?.photobook?.id) {
+                        if (vmCurrentState != null && vmCurrentState.photobook.id == photobookId
+                            && vmCurrentState.pages.size != loadedBookState?.pages?.size) {
+                            loadedBookState = vmCurrentState
+                        }
+                    }
+
+                    PhotobookEditorScreen(
+                        bookState = theBookState,
                     onUpdateState = { loadedBookState = it },
                     onBack = { navController.popBackStack() },
                     onSave = {
@@ -489,15 +493,15 @@ fun YingJianNavHost(
                         }
                     },
                     onExportPdf = {
-                        pdfBytesState.value = PdfExportUtil.exportPdf(context, bookState)
+                        pdfBytesState.value = PdfExportUtil.exportPdf(context, theBookState)
                         createPdf.launch("photobook.pdf")
                     },
                     onNavigateToPreview = {
-                        navController.navigate(NavDestinations.Preview.createRoute(bookState.photobook.id))
+                        navController.navigate(NavDestinations.Preview.createRoute(theBookState.photobook.id))
                     },
                     onAddPhotos = {
                         navController.currentBackStackEntry?.savedStateHandle?.set("appendMode", "true")
-                        navController.currentBackStackEntry?.savedStateHandle?.set("editorPhotobookId", bookState.photobook.id.toString())
+                        navController.currentBackStackEntry?.savedStateHandle?.set("editorPhotobookId", theBookState.photobook.id.toString())
                         navController.navigate(NavDestinations.PhotoPicker.route)
                     },
                     onSetCover = {
@@ -568,9 +572,10 @@ fun YingJianNavHost(
                     pageMoodText = currentMemory?.moodText,
                     pageMemoryDate = currentMemory?.timestamp
                 )
-            } ?: run {
-                androidx.compose.material3.Text("Loading...")
-            }
+            } // end key(currentPage)
+        } else {
+            androidx.compose.material3.Text("Loading...")
+        }
         }
         composable(NavDestinations.Preview.route) { backStackEntry ->
             val photobookId = backStackEntry.arguments?.getString("photobookId")?.toLongOrNull()
