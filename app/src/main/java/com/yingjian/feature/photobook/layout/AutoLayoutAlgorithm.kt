@@ -108,4 +108,70 @@ object AutoLayoutAlgorithm {
             mode = LayoutMode.AUTO
         )
     }
+
+    fun createSinglePhotoPage(
+        memory: MemoryRecordEntity,
+        paperSize: PaperSize,
+        pageNumber: Int
+    ): PageState {
+        val safeWidth = paperSize.widthMm - BLEED_MM * 2
+        val safeHeight = paperSize.heightMm - BLEED_MM * 2
+
+        val aspectRatio = if (memory.imageHeight > 0) {
+            memory.imageWidth.toFloat() / memory.imageHeight.toFloat()
+        } else {
+            1f
+        }
+
+        var imageWidthMm = minOf(safeWidth, safeHeight * aspectRatio)
+        var imageHeightMm = imageWidthMm / aspectRatio
+
+        if (imageHeightMm > safeHeight) {
+            imageHeightMm = safeHeight
+            imageWidthMm = imageHeightMm * aspectRatio
+        }
+
+        val imageXMm = (paperSize.widthMm - imageWidthMm) / 2
+        val imageYMm = BLEED_MM + (safeHeight - imageHeightMm) / 2
+
+        val elements = mutableListOf<PageElement>()
+
+        elements.add(
+            ImageElement(
+                memoryId = memory.id,
+                imageUri = memory.imageUri,
+                xMm = imageXMm,
+                yMm = imageYMm,
+                widthMm = imageWidthMm,
+                heightMm = imageHeightMm,
+                rotationDeg = 0f,
+                zIndex = 0
+            )
+        )
+
+        if (!memory.moodText.isNullOrBlank()) {
+            val textYMm = imageYMm + imageHeightMm + TEXT_GAP_MM
+            val textBottom = textYMm + 6f
+            if (textBottom <= paperSize.heightMm - TEXT_BOTTOM_MARGIN_MM) {
+                elements.add(
+                    TextElement(
+                        text = memory.moodText,
+                        xMm = (paperSize.widthMm - paperSize.widthMm * TEXT_WIDTH_RATIO) / 2,
+                        yMm = textYMm,
+                        widthMm = paperSize.widthMm * TEXT_WIDTH_RATIO,
+                        heightMm = 10f,
+                        rotationDeg = 0f,
+                        zIndex = 1
+                    )
+                )
+            }
+        }
+
+        return PageState(
+            pageNumber = pageNumber,
+            elements = elements,
+            trimWidthMm = paperSize.widthMm,
+            trimHeightMm = paperSize.heightMm
+        )
+    }
 }
