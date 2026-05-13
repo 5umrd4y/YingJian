@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 
 data class PhotobookUiState(
     val photobooks: List<PhotobookEntity> = emptyList(),
+    val pageCounts: Map<Long, Int> = emptyMap(),
     val currentBookState: BookState? = null,
     val isLoading: Boolean = false,
     val isSelectionMode: Boolean = false,
@@ -45,7 +46,13 @@ class PhotobookViewModel(
             val books = withContext(Dispatchers.IO) {
                 photobookRepository.getAllPhotobooks()
             }
-            uiState = uiState.copy(photobooks = books)
+            val counts = mutableMapOf<Long, Int>()
+            books.forEach { book ->
+                withContext(Dispatchers.IO) {
+                    counts[book.id] = photobookRepository.getPageCount(book.id)
+                }
+            }
+            uiState = uiState.copy(photobooks = books, pageCounts = counts)
         }
     }
 
@@ -212,6 +219,21 @@ class PhotobookViewModel(
                 pages = currentState.pages + newPages,
                 currentPage = currentState.pages.size
             )
+
+            // Persist new pages to DB
+            withContext(Dispatchers.IO) {
+                newPages.forEach { page ->
+                    photobookRepository.savePageLayout(
+                        PageLayoutEntity(
+                            photobookId = currentState.photobook.id,
+                            pageNumber = page.pageNumber,
+                            elementsJson = ElementSerializer.serialize(page.elements),
+                            mode = currentState.mode.name
+                        )
+                    )
+                }
+            }
+
             uiState = uiState.copy(
                 currentBookState = updatedState,
                 isLoading = false

@@ -118,13 +118,15 @@ fun YingJianNavHost(
 
             if (selectedIdsStr != null) {
                 val ids = selectedIdsStr.split(",").mapNotNull { it.toLongOrNull() }
+                val photobookName = backStackEntry.savedStateHandle.get<String>("newPhotobookName") ?: "未命名画册"
 
                 LaunchedEffect(selectedIdsStr) {
                     viewModel.createPhotobook(
-                        name = "未命名画册",
+                        name = photobookName,
                         selectedMemoryIds = ids
                     )
                     backStackEntry.savedStateHandle.remove<String>("selectedMemoryIds")
+                    backStackEntry.savedStateHandle.remove<String>("newPhotobookName")
                     backStackEntry.savedStateHandle.set("createdBook", "true")
                 }
             }
@@ -143,7 +145,8 @@ fun YingJianNavHost(
 
             PhotobookScreen(
                 viewModel = viewModel,
-                onNavigateToPhotoPicker = {
+                onNavigateToPhotoPicker = { name ->
+                    backStackEntry.savedStateHandle.set("newPhotobookName", name)
                     navController.navigate(NavDestinations.PhotoPicker.route)
                 },
                 onNavigateToEditor = { photobookId ->
@@ -495,12 +498,17 @@ fun YingJianNavHost(
                         val imageElement = loadedBookState?.pages?.getOrNull(currentPage)
                             ?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
                         imageElement?.let {
-                            loadedBookState = loadedBookState?.copy(
-                                photobook = loadedBookState!!.photobook.copy(
-                                    coverImageUri = it.imageUri,
-                                    updatedAt = System.currentTimeMillis()
-                                )
+                            val updatedPhotobook = loadedBookState!!.photobook.copy(
+                                coverImageUri = it.imageUri,
+                                updatedAt = System.currentTimeMillis()
                             )
+                            loadedBookState = loadedBookState?.copy(photobook = updatedPhotobook)
+                            // Persist cover to DB immediately
+                            coroutineScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    deps.photobookRepository.updatePhotobook(updatedPhotobook)
+                                }
+                            }
                         }
                     },
                     onDeleteImage = {

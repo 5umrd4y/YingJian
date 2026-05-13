@@ -5,7 +5,7 @@ import androidx.compose.runtime.Composable
 @Composable
 fun PhotobookScreen(
     viewModel: PhotobookViewModel,
-    onNavigateToPhotoPicker: () -> Unit = {},
+    onNavigateToPhotoPicker: (String) -> Unit = {},
     onNavigateToEditor: (Long) -> Unit = {}
 ) {
     PhotobookListScreen(

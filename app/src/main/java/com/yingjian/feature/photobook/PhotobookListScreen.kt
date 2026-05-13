@@ -71,7 +71,7 @@ import java.util.Locale
 @Composable
 fun PhotobookListScreen(
     viewModel: PhotobookViewModel,
-    onNavigateToPhotoPicker: () -> Unit = {},
+    onNavigateToPhotoPicker: (String) -> Unit = {},
     onNavigateToEditor: (Long) -> Unit = {}
 ) {
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
@@ -168,6 +168,7 @@ fun PhotobookListScreen(
                 PhotobookCoverCard(
                     photobook = book,
                     isSelected = isSelected,
+                    pageCount = viewModel.uiState.pageCounts[book.id] ?: 0,
                     onClick = {
                         if (viewModel.uiState.isSelectionMode) {
                             viewModel.toggleSelection(book.id)
@@ -227,7 +228,7 @@ fun PhotobookListScreen(
             onDismiss = { showCreateDialog = false },
             onCreate = { name ->
                 showCreateDialog = false
-                onNavigateToPhotoPicker()
+                onNavigateToPhotoPicker(name.takeIf { it.isNotBlank() } ?: "未命名画册")
             }
         )
     }
@@ -238,6 +239,7 @@ fun PhotobookListScreen(
 private fun PhotobookCoverCard(
     photobook: PhotobookEntity,
     isSelected: Boolean = false,
+    pageCount: Int = 0,
     onClick: () -> Unit,
     onLongPress: () -> Unit
 ) {
@@ -326,11 +328,19 @@ private fun PhotobookCoverCard(
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
             )
-            Text(
-                text = "0页",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "${pageCount}页",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(photobook.createdAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
         }
     }
 }

@@ -62,10 +62,13 @@ fun PhotobookCanvasPage(
     val pageAspect = pageState.trimWidthMm / pageState.trimHeightMm
     val scaleFactor = containerWidthDp.value / pageState.trimWidthMm
 
-    // Gesture state
+    // Gesture state (px)
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     var scale by remember { mutableFloatStateOf(1f) }
+
+    // Helper: convert mm-based offset + size to px
+    fun mmToPx(mm: Float): Float = with(density) { (mm * scaleFactor).dp.toPx() }
 
     Box(
         modifier = modifier
@@ -106,12 +109,14 @@ fun PhotobookCanvasPage(
                     is ImageElement -> RenderImageElement(
                         element = element,
                         scaleFactor = scaleFactor,
-                        zoomLevel = scale
+                        zoomLevel = scale,
+                        density = density
                     )
                     is TextElement -> RenderPrinterTextElement(
                         element = element,
                         scaleFactor = scaleFactor,
-                        dateText = dateText
+                        dateText = dateText,
+                        density = density
                     )
                 }
             }
@@ -120,38 +125,36 @@ fun PhotobookCanvasPage(
             if (moodText != null && pageState.elements.none { it is TextElement }) {
                 val imageEl = pageState.elements.filterIsInstance<ImageElement>().firstOrNull()
                 if (imageEl != null) {
-                    val yDp = ((imageEl.yMm + imageEl.heightMm + 8f) * scaleFactor)
-                    val xDp = ((imageEl.xMm + imageEl.widthMm / 2f) * scaleFactor)
-                    val widthDp = (imageEl.widthMm * scaleFactor)
+                    with(density) {
+                        val centerPx = mmToPx(imageEl.xMm + imageEl.widthMm / 2f)
+                        val topPx = mmToPx(imageEl.yMm + imageEl.heightMm + 8f)
+                        val widthDp = ((imageEl.widthMm * scaleFactor)).dp
 
-                    Column(
-                        modifier = Modifier
-                            .offset { IntOffset((xDp.roundToInt() - (widthDp / 2).dp.roundToPx()), yDp.roundToInt()) }
-                            .width(widthDp.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = moodText,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraLight,
-                                letterSpacing = 0.2.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        if (dateText != null) {
+                        Column(
+                            modifier = Modifier
+                                .offset { IntOffset(centerPx.roundToInt() - (widthDp / 2).roundToPx(), topPx.roundToInt()) }
+                                .width(widthDp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             Text(
-                                text = dateText,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.ExtraLight,
-                                    letterSpacing = 0.1.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 2.dp)
+                                text = moodText,
+                                fontSize = (11f * scaleFactor).sp,
+                                fontWeight = FontWeight.ExtraLight,
+                                letterSpacing = (0.2f * scaleFactor).sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
                             )
+                            if (dateText != null) {
+                                Text(
+                                    text = dateText,
+                                    fontSize = (9f * scaleFactor).sp,
+                                    fontWeight = FontWeight.ExtraLight,
+                                    letterSpacing = (0.1f * scaleFactor).sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = (2f * scaleFactor).dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -202,61 +205,63 @@ fun PhotobookCanvasPage(
 private fun RenderImageElement(
     element: ImageElement,
     scaleFactor: Float,
-    zoomLevel: Float
+    zoomLevel: Float,
+    density: androidx.compose.ui.unit.Density
 ) {
-    val xDp = (element.xMm * scaleFactor * zoomLevel)
-    val yDp = (element.yMm * scaleFactor * zoomLevel)
-    val wDp = (element.widthMm * scaleFactor * zoomLevel)
-    val hDp = (element.heightMm * scaleFactor * zoomLevel)
+    with(density) {
+        val xPx = (element.xMm * scaleFactor * zoomLevel).dp.roundToPx()
+        val yPx = (element.yMm * scaleFactor * zoomLevel).dp.roundToPx()
+        val wDp = ((element.widthMm * scaleFactor * zoomLevel)).dp
+        val hDp = ((element.heightMm * scaleFactor * zoomLevel)).dp
 
-    AsyncImage(
-        model = Uri.parse(element.imageUri),
-        contentDescription = null,
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .offset { IntOffset(xDp.roundToInt(), yDp.roundToInt()) }
-            .size(wDp.dp, hDp.dp)
-    )
+        AsyncImage(
+            model = Uri.parse(element.imageUri),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .offset { IntOffset(xPx, yPx) }
+                .size(wDp, hDp)
+        )
+    }
 }
 
 @Composable
 private fun RenderPrinterTextElement(
     element: TextElement,
     scaleFactor: Float,
-    dateText: String? = null
+    dateText: String? = null,
+    density: androidx.compose.ui.unit.Density
 ) {
-    val xDp = (element.xMm * scaleFactor)
-    val yDp = (element.yMm * scaleFactor)
-    val widthDp = (element.widthMm * scaleFactor)
+    with(density) {
+        val xPx = (element.xMm * scaleFactor).dp.roundToPx()
+        val yPx = (element.yMm * scaleFactor).dp.roundToPx()
+        val widthDp = ((element.widthMm * scaleFactor)).dp
 
-    Column(
-        modifier = Modifier
-            .offset { IntOffset(xDp.roundToInt(), yDp.roundToInt()) }
-            .width(widthDp.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = element.text,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraLight,
-                letterSpacing = 0.2.sp
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        if (dateText != null) {
+        Column(
+            modifier = Modifier
+                .offset { IntOffset(xPx, yPx) }
+                .width(widthDp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
-                text = dateText,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.ExtraLight,
-                    letterSpacing = 0.1.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 2.dp)
+                text = element.text,
+                fontSize = (11f * scaleFactor).sp,
+                fontWeight = FontWeight.ExtraLight,
+                letterSpacing = (0.2f * scaleFactor).sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
+            if (dateText != null) {
+                Text(
+                    text = dateText,
+                    fontSize = (9f * scaleFactor).sp,
+                    fontWeight = FontWeight.ExtraLight,
+                    letterSpacing = (0.1f * scaleFactor).sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = (2f * scaleFactor).dp)
+                )
+            }
         }
     }
 }
