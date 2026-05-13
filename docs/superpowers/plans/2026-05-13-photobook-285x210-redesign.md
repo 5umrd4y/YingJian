@@ -911,6 +911,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -924,13 +925,17 @@ fun PhotobookEditorScreen(
     onAddPhotos: () -> Unit,
     onSetCover: () -> Unit,
     onDeleteImage: () -> Unit,
-    onResetImage: () -> Unit
+    onResetImage: () -> Unit,
+    pageMoodText: String? = null,
+    pageMemoryDate: Long? = null
 ) {
     var currentPage by remember { mutableIntStateOf(bookState.currentPage) }
     var isImageSelected by remember { mutableStateOf(false) }
     var showCoverSheet by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(bookState.photobook.name) },
@@ -949,7 +954,13 @@ fun PhotobookEditorScreen(
                     IconButton(onClick = onExportPdf) {
                         Icon(Icons.Default.PictureAsPdf, contentDescription = "导出PDF")
                     }
-                    IconButton(onClick = onSave) {
+                    IconButton(onClick = {
+                        val coroutineScope = rememberCoroutineScope()
+                        onSave()
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("已保存")
+                        }
+                    }) {
                         Icon(Icons.Default.Save, contentDescription = "保存")
                     }
                 }
@@ -976,9 +987,13 @@ fun PhotobookEditorScreen(
                 modifier = Modifier.weight(1f)
             ) { pageIndex ->
                 if (pageIndex in bookState.pages.indices) {
+                    val currentPageState = bookState.pages[pageIndex]
+                    // mood/date passed from NavHost's produceState memory lookup
                     PhotobookCanvasPage(
-                        pageState = bookState.pages[pageIndex],
+                        pageState = currentPageState,
                         containerWidthDp = 300.dp,
+                        moodText = pageMoodText,
+                        memoryDate = pageMemoryDate,
                         isSelected = isImageSelected,
                         onSelect = { isImageSelected = true },
                         onDeselect = { isImageSelected = false },
@@ -1465,11 +1480,22 @@ git commit -m "fix: use #FAF9F6 background and 285x210 default in PDF export"
 
 - [ ] **Step 1: Update PhotobookEditorScreen call site**
 
-In `YingJianNavHost.kt`, update the `PhotobookEditorScreen` composable call to pass the new callbacks:
+In `YingJianNavHost.kt`, update the `PhotobookEditorScreen` composable call. Before the call, add memory lookup for mood/date:
 
 ```kotlin
+// Load mood/date from memory for current page
+val currentPageState = bookState.pages.getOrNull(bookState.currentPage)
+val currentImageElement = currentPageState?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
+val currentMemory by produceState<MemoryRecordEntity?>(initialValue = null, currentImageElement?.memoryId) {
+    value = currentImageElement?.memoryId?.let { memoryId ->
+        withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(memoryId) }
+    }
+}
+
 PhotobookEditorScreen(
     bookState = bookState,
+    pageMoodText = currentMemory?.moodText,
+    pageMemoryDate = currentMemory?.timestamp,
     onUpdateState = { loadedBookState = it },
     onBack = { navController.popBackStack() },
     onSave = {
@@ -1527,26 +1553,22 @@ PhotobookEditorScreen(
         loadedBookState?.let { state ->
             val currentPage = state.currentPage
             val page = state.pages.getOrNull(currentPage) ?: return@let
-            val selectedIndex = state.selectedElementIndex ?: return@let
-            val updatedElements = page.elements.filterIndexed { i, _ -> i != selectedIndex }
+            // 285x210 = one image per page; remove all ImageElements from this page
+            val updatedElements = page.elements.filterNot { it is ImageElement }
             val updatedPages = state.pages.toMutableList()
             if (updatedElements.isEmpty()) {
-                // Remove empty page and renumber
+                // Page becomes empty → remove page and renumber
                 updatedPages.removeAt(currentPage)
                 val renumbered = updatedPages.mapIndexed { idx, p ->
                     p.copy(pageNumber = idx + 1)
                 }
                 loadedBookState = state.copy(
                     pages = renumbered,
-                    currentPage = currentPage.coerceAtMost(renumbered.size - 1),
-                    selectedElementIndex = null
+                    currentPage = currentPage.coerceAtMost((renumbered.size - 1).coerceAtLeast(0))
                 )
             } else {
                 updatedPages[currentPage] = page.copy(elements = updatedElements)
-                loadedBookState = state.copy(
-                    pages = updatedPages,
-                    selectedElementIndex = null
-                )
+                loadedBookState = state.copy(pages = updatedPages)
             }
         }
     },
