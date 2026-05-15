@@ -59,28 +59,32 @@ object AutoLayoutAlgorithm {
     }
 
     fun createSinglePhotoPage(
-        memory: MemoryRecordEntity,
+        imageRef: ImageRef,
+        moodText: String?,
         paperSize: PaperSize,
         pageNumber: Int
-    ): PageState {
-        return PageState(
-            pageNumber = pageNumber,
-            template = PageTemplate.Single,
-            slots = listOf(
-                ImageSlot(
-                    slotId = "slot-1",
-                    imageRef = ImageRef(
-                        memoryId = memory.id,
-                        imageUri = memory.imageUri,
-                        sourceImageIndex = 0
-                    )
+    ): PageState = PageState(
+        pageNumber = pageNumber,
+        template = PageTemplate.Single,
+        slots = listOf(ImageSlot(slotId = "slot-1", imageRef = imageRef)),
+        textElements = if (moodText.isNullOrBlank()) {
+            emptyList()
+        } else {
+            listOf(
+                TextElement(
+                    text = moodText,
+                    xMm = paperSize.widthMm * 0.15f,
+                    yMm = paperSize.heightMm - 22f,
+                    widthMm = paperSize.widthMm * 0.7f,
+                    heightMm = 10f,
+                    rotationDeg = 0f,
+                    zIndex = 1
                 )
-            ),
-            textElements = buildMoodTextElements(memory, paperSize),
-            trimWidthMm = paperSize.widthMm,
-            trimHeightMm = paperSize.heightMm
-        )
-    }
+            )
+        },
+        trimWidthMm = paperSize.widthMm,
+        trimHeightMm = paperSize.heightMm
+    )
 
     private fun buildMoodTextElements(memory: MemoryRecordEntity, paperSize: PaperSize): List<TextElement> {
         if (memory.moodText.isNullOrBlank()) return emptyList()

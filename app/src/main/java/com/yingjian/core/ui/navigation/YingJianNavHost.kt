@@ -33,6 +33,8 @@ import com.yingjian.feature.photobook.PhotobookViewModel
 import com.yingjian.feature.photobook.MoveResult
 import com.yingjian.feature.photobook.PhotobookSlotActions
 import com.yingjian.feature.photobook.TemplateChangeResult
+import com.yingjian.feature.photobook.SelectedMemoryPhotoCodec
+import com.yingjian.feature.photobook.MemoryPhotoPickerMode
 import com.yingjian.feature.photobook.export.PdfExportUtil
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
@@ -119,18 +121,18 @@ fun YingJianNavHost(
             )
             val viewModel: PhotobookViewModel = viewModel(factory = factory)
 
-            val selectedIdsStr = backStackEntry.savedStateHandle.get<String>("selectedMemoryIds")
+            val selectedPhotosStr = backStackEntry.savedStateHandle.get<String>("selectedMemoryPhotos")
 
-            if (selectedIdsStr != null) {
-                val ids = selectedIdsStr.split(",").mapNotNull { it.toLongOrNull() }
+            if (selectedPhotosStr != null) {
+                val selectedPhotos = SelectedMemoryPhotoCodec.decode(selectedPhotosStr)
                 val photobookName = backStackEntry.savedStateHandle.get<String>("newPhotobookName") ?: "未命名画册"
 
-                LaunchedEffect(selectedIdsStr) {
-                    viewModel.createPhotobook(
+                LaunchedEffect(selectedPhotosStr) {
+                    viewModel.createPhotobookFromPhotos(
                         name = photobookName,
-                        selectedMemoryIds = ids
+                        selectedPhotos = selectedPhotos
                     )
-                    backStackEntry.savedStateHandle.remove<String>("selectedMemoryIds")
+                    backStackEntry.savedStateHandle.remove<String>("selectedMemoryPhotos")
                     backStackEntry.savedStateHandle.remove<String>("newPhotobookName")
                     backStackEntry.savedStateHandle.set("createdBook", "true")
                 }
@@ -350,17 +352,19 @@ fun YingJianNavHost(
         composable(NavDestinations.PhotoPicker.route) { backStackEntry ->
             val allMemories = rememberLoadedMemories(deps.memoryRepository)
             val isAppendMode = backStackEntry.savedStateHandle.get<String>("appendMode") == "true"
+            val mode = if (isAppendMode) MemoryPhotoPickerMode.BatchImport else MemoryPhotoPickerMode.BatchImport
 
             PhotoPickerScreen(
                 memories = allMemories,
+                mode = mode,
                 onBack = { navController.popBackStack() },
-                onComplete = { selectedIds ->
-                    val idsJson = selectedIds.map { it.toString() }.joinToString(",")
+                onComplete = { selectedPhotos ->
+                    val encoded = SelectedMemoryPhotoCodec.encode(selectedPhotos)
                     navController.previousBackStackEntry?.savedStateHandle?.apply {
                         if (isAppendMode) {
-                            set("appendMemoryIds", idsJson)
+                            set("appendMemoryPhotos", encoded)
                         } else {
-                            set("selectedMemoryIds", idsJson)
+                            set("selectedMemoryPhotos", encoded)
                         }
                     }
                     backStackEntry.savedStateHandle.remove<String>("appendMode")
@@ -442,18 +446,18 @@ fun YingJianNavHost(
                     }
 
                     // Handle append mode: when returning from PhotoPicker with new photos
-                    val appendIdsStr = backStackEntry.savedStateHandle.get<String>("appendMemoryIds")
-                    LaunchedEffect(appendIdsStr) {
-                        if (appendIdsStr != null) {
-                            val ids = appendIdsStr.split(",").mapNotNull { it.toLongOrNull() }
-                            if (ids.isNotEmpty()) {
-                                viewModel.appendPhotosToBook(ids)
+                    val appendPhotosStr = backStackEntry.savedStateHandle.get<String>("appendMemoryPhotos")
+                    LaunchedEffect(appendPhotosStr) {
+                        if (appendPhotosStr != null) {
+                            val appendPhotos = SelectedMemoryPhotoCodec.decode(appendPhotosStr)
+                            if (appendPhotos.isNotEmpty()) {
+                                viewModel.appendPhotosToBook(appendPhotos)
                                 val vmState = viewModel.uiState.currentBookState
                                 if (vmState != null && vmState.photobook.id == photobookId) {
                                     loadedBookState = vmState
                                 }
                             }
-                            backStackEntry.savedStateHandle.remove<String>("appendMemoryIds")
+                            backStackEntry.savedStateHandle.remove<String>("appendMemoryPhotos")
                         }
                     }
 
@@ -587,7 +591,12 @@ fun YingJianNavHost(
                         val slotImageRef = slot.imageRef ?: return@PhotobookEditorScreen
                         val memory = runBlocking { withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(slotImageRef.memoryId) } } ?: return@PhotobookEditorScreen
                         val paperSize = runCatching { PaperSize.valueOf(state.photobook.paperSize) }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
-                        val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(memory, paperSize, page.pageNumber)
+                        val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
+                            imageRef = slotImageRef,
+                            moodText = memory?.moodText,
+                            paperSize = paperSize,
+                            pageNumber = page.pageNumber
+                        )
                         val updatedPages = state.pages.toMutableList()
                         updatedPages[cp] = resetPage.copy(
                             slots = resetPage.slots.map { s -> if (s.slotId == selectedSlotId) s.copy(slotId = selectedSlotId) else s },

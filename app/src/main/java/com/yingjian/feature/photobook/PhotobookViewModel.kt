@@ -14,6 +14,7 @@ import com.yingjian.core.data.repository.PhotobookRepository
 import com.yingjian.core.util.PageLayoutDocumentSerializer
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.ImageRef
 import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PaperSize
 import kotlinx.coroutines.Dispatchers
@@ -56,10 +57,9 @@ class PhotobookViewModel(
         }
     }
 
-    fun createPhotobook(name: String, selectedMemoryIds: List<Long>) {
+    fun createPhotobookFromPhotos(name: String, selectedPhotos: List<SelectedMemoryPhoto>) {
         viewModelScope.launch {
             uiState = uiState.copy(isLoading = true)
-
             val paperSize = PaperSize.TWELVE_INCH_LANDSCAPE
             val photobook = PhotobookEntity(
                 name = name,
@@ -70,19 +70,32 @@ class PhotobookViewModel(
             val bookId = withContext(Dispatchers.IO) {
                 photobookRepository.createPhotobook(photobook)
             }
-
-            val memories = withContext(Dispatchers.IO) {
-                memoryRepository.getMemoriesByIds(selectedMemoryIds)
+            val memoryById = withContext(Dispatchers.IO) {
+                selectedPhotos.mapNotNull { photo ->
+                    memoryRepository.getMemoryById(photo.memoryId)?.let { photo.memoryId to it }
+                }.toMap()
             }
-
-            val bookState = AutoLayoutAlgorithm.layout(
-                memories = memories,
-                paperSize = paperSize,
-                photobook = photobook.copy(id = bookId)
+            val pages = selectedPhotos.mapIndexed { index, photo ->
+                AutoLayoutAlgorithm.createSinglePhotoPage(
+                    imageRef = ImageRef(
+                        memoryId = photo.memoryId,
+                        imageUri = photo.imageUri,
+                        sourceImageIndex = photo.sourceImageIndex,
+                        sourceImageId = photo.sourceImageId
+                    ),
+                    moodText = memoryById[photo.memoryId]?.moodText,
+                    paperSize = paperSize,
+                    pageNumber = index + 1
+                )
+            }
+            val bookState = BookState(
+                photobook = photobook.copy(id = bookId),
+                pages = pages,
+                currentPage = 0,
+                mode = LayoutMode.AUTO
             )
-
             withContext(Dispatchers.IO) {
-                bookState.pages.forEach { page ->
+                pages.forEach { page ->
                     photobookRepository.savePageLayout(
                         PageLayoutEntity(
                             photobookId = bookId,
@@ -93,12 +106,7 @@ class PhotobookViewModel(
                     )
                 }
             }
-
-            uiState = uiState.copy(
-                currentBookState = bookState,
-                isLoading = false
-            )
-            // Refresh the list so the new photobook appears
+            uiState = uiState.copy(currentBookState = bookState, isLoading = false)
             loadPhotobooks()
         }
     }
@@ -193,34 +201,36 @@ class PhotobookViewModel(
         }
     }
 
-    fun appendPhotosToBook(memoryIds: List<Long>) {
+    fun appendPhotosToBook(selectedPhotos: List<SelectedMemoryPhoto>) {
         viewModelScope.launch {
             val currentState = uiState.currentBookState ?: return@launch
             uiState = uiState.copy(isLoading = true)
-
-            val memories = withContext(Dispatchers.IO) {
-                memoryRepository.getMemoriesByIds(memoryIds)
-            }
-
             val paperSize = runCatching {
                 PaperSize.valueOf(currentState.photobook.paperSize)
             }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
-
+            val memoryById = withContext(Dispatchers.IO) {
+                selectedPhotos.mapNotNull { photo ->
+                    memoryRepository.getMemoryById(photo.memoryId)?.let { photo.memoryId to it }
+                }.toMap()
+            }
             val startPageNumber = currentState.pages.size + 1
-            val newPages = memories.mapIndexed { index, memory ->
+            val newPages = selectedPhotos.mapIndexed { index, photo ->
                 AutoLayoutAlgorithm.createSinglePhotoPage(
-                    memory = memory,
+                    imageRef = ImageRef(
+                        memoryId = photo.memoryId,
+                        imageUri = photo.imageUri,
+                        sourceImageIndex = photo.sourceImageIndex,
+                        sourceImageId = photo.sourceImageId
+                    ),
+                    moodText = memoryById[photo.memoryId]?.moodText,
                     paperSize = paperSize,
                     pageNumber = startPageNumber + index
                 )
             }
-
             val updatedState = currentState.copy(
                 pages = currentState.pages + newPages,
                 currentPage = currentState.pages.size
             )
-
-            // Persist new pages to DB
             withContext(Dispatchers.IO) {
                 newPages.forEach { page ->
                     photobookRepository.savePageLayout(
@@ -233,11 +243,7 @@ class PhotobookViewModel(
                     )
                 }
             }
-
-            uiState = uiState.copy(
-                currentBookState = updatedState,
-                isLoading = false
-            )
+            uiState = uiState.copy(currentBookState = updatedState, isLoading = false)
         }
     }
 

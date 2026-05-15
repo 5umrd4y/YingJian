@@ -47,10 +47,11 @@ import com.yingjian.core.data.database.MemoryRecordEntity
 @Composable
 fun PhotoPickerScreen(
     memories: List<MemoryRecordEntity>,
+    mode: MemoryPhotoPickerMode,
     onBack: () -> Unit,
-    onComplete: (List<Long>) -> Unit
+    onComplete: (List<SelectedMemoryPhoto>) -> Unit
 ) {
-    val selectedIds = remember { mutableStateListOf<Long>() }
+    val selectedPhotos = remember { mutableStateListOf<SelectedMemoryPhoto>() }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
@@ -63,12 +64,12 @@ fun PhotoPickerScreen(
                     }
                 },
                 actions = {
-                    if (selectedIds.isNotEmpty()) {
+                    if (selectedPhotos.isNotEmpty()) {
                         Text(
-                            "完成 (${selectedIds.size})",
+                            "完成 (${selectedPhotos.size})",
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
-                                .clickable { onComplete(selectedIds.toList()) }
+                                .clickable { onComplete(selectedPhotos.toList()) }
                                 .padding(horizontal = 16.dp)
                         )
                     }
@@ -95,22 +96,53 @@ fun PhotoPickerScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(memories) { memory ->
-                    val isSelected = selectedIds.contains(memory.id)
-                    PhotoGridItem(
-                        memory = memory,
-                        isSelected = isSelected,
-                        onToggle = {
-                            if (isSelected) selectedIds.remove(memory.id)
-                            else selectedIds.add(memory.id)
-                        }
-                    )
+                    val photos = memory.toSelectablePhotos()
+                    val allSelected = photos.all { photo ->
+                        selectedPhotos.any { it.memoryId == photo.memoryId && it.imageUri == photo.imageUri }
+                    }
+
+                    if (mode == MemoryPhotoPickerMode.BatchImport) {
+                        PhotoGridItem(
+                            memory = memory,
+                            isSelected = allSelected,
+                            onToggle = {
+                                if (allSelected) {
+                                    selectedPhotos.removeAll { selected ->
+                                        photos.any { it.memoryId == selected.memoryId && it.imageUri == selected.imageUri }
+                                    }
+                                } else {
+                                    photos.forEach { photo ->
+                                        if (selectedPhotos.none { it.memoryId == photo.memoryId && it.imageUri == photo.imageUri }) {
+                                            selectedPhotos.add(photo)
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    } else {
+                        // Single-slot mode
+                        val firstPhoto = photos.firstOrNull()
+                        PhotoGridItem(
+                            memory = memory,
+                            isSelected = firstPhoto != null && selectedPhotos.any {
+                                it.memoryId == firstPhoto.memoryId && it.imageUri == firstPhoto.imageUri
+                            },
+                            onToggle = {
+                                if (mode == MemoryPhotoPickerMode.SingleSlot && firstPhoto != null) {
+                                    selectedPhotos.clear()
+                                    selectedPhotos.add(firstPhoto)
+                                    onComplete(selectedPhotos.toList())
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
-    // Floating preview button
-    if (selectedIds.isNotEmpty()) {
+    // Floating preview button (batch mode only)
+    if (selectedPhotos.isNotEmpty() && mode == MemoryPhotoPickerMode.BatchImport) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -123,7 +155,7 @@ fun PhotoPickerScreen(
             ) {
                 Icon(Icons.Default.Visibility, contentDescription = null)
                 Text(
-                    "预览选中 (${selectedIds.size})",
+                    "预览选中 (${selectedPhotos.size})",
                     modifier = Modifier.padding(horizontal = 8.dp),
                     color = MaterialTheme.colorScheme.onPrimary
                 )
