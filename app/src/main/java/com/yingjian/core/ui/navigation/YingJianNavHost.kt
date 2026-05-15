@@ -33,7 +33,6 @@ import com.yingjian.feature.photobook.PhotobookViewModel
 import com.yingjian.feature.photobook.export.PdfExportUtil
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
-import com.yingjian.feature.photobook.model.ImageElement
 import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
@@ -41,7 +40,7 @@ import com.yingjian.feature.settings.SettingsScreen
 import com.yingjian.feature.settings.AboutScreen
 import com.yingjian.core.data.database.MemoryRecordEntity
 import com.yingjian.core.data.database.PageLayoutEntity
-import com.yingjian.core.util.ElementSerializer
+import com.yingjian.core.util.PageLayoutDocumentSerializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -387,14 +386,12 @@ fun YingJianNavHost(
                             deps.photobookRepository.getPageLayouts(photobookId)
                         }
                         val pages = pageLayouts.map { layout ->
-                            val elements = try {
-                                ElementSerializer.deserialize(layout.elementsJson)
-                            } catch (e: Exception) {
-                                emptyList()
-                            }
+                            val document = PageLayoutDocumentSerializer.deserialize(layout.elementsJson)
                             PageState(
                                 pageNumber = layout.pageNumber,
-                                elements = elements,
+                                template = document.template,
+                                slots = document.slots,
+                                textElements = document.textElements,
                                 trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
                                 trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
                             )
@@ -429,12 +426,12 @@ fun YingJianNavHost(
             if (theBookState != null) {
                 // Load mood/date from memory for current content page.
                     val currentPageState = theBookState.pages.getOrNull(currentPage)
-                    val currentImageElement = currentPageState?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
+                    val currentImageRef = currentPageState?.slots?.firstOrNull { !it.isEmpty }?.imageRef
                     val currentMemory by produceState<MemoryRecordEntity?>(
                         initialValue = null,
-                        currentImageElement?.memoryId
+                        currentImageRef?.memoryId
                     ) {
-                        value = currentImageElement?.memoryId?.let { memoryId ->
+                        value = currentImageRef?.memoryId?.let { memoryId ->
                             withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(memoryId) }
                         }
                     }
@@ -485,7 +482,9 @@ fun YingJianNavHost(
                                             PageLayoutEntity(
                                                 photobookId = currentState.photobook.id,
                                                 pageNumber = page.pageNumber,
-                                                elementsJson = ElementSerializer.serialize(page.elements),
+                                                elementsJson = com.yingjian.core.util.PageLayoutDocumentSerializer.serialize(
+                                                    page.toDocument()
+                                                ),
                                                 mode = currentState.mode.name
                                             )
                                         )
@@ -509,9 +508,9 @@ fun YingJianNavHost(
                     },
                     onSetCover = {
                         val currentPage = loadedBookState?.currentPage ?: 0
-                        val imageElement = loadedBookState?.pages?.getOrNull(currentPage)
-                            ?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
-                        imageElement?.let {
+                        val page = loadedBookState?.pages?.getOrNull(currentPage)
+                        val imageRef = page?.slots?.firstOrNull { !it.isEmpty }?.imageRef
+                        imageRef?.let {
                             val updatedPhotobook = loadedBookState!!.photobook.copy(
                                 coverImageUri = it.imageUri,
                                 updatedAt = System.currentTimeMillis()
@@ -529,9 +528,9 @@ fun YingJianNavHost(
                         loadedBookState?.let { state ->
                             val cp = state.currentPage
                             val page = state.pages.getOrNull(cp) ?: return@let
-                            val updatedElements = page.elements.filterNot { it is ImageElement }
+                            val updatedSlots = page.slots.map { it.copy(imageRef = null) }
                             val updatedPages = state.pages.toMutableList()
-                            if (updatedElements.isEmpty()) {
+                            if (updatedSlots.all { it.isEmpty }) {
                                 updatedPages.removeAt(cp)
                                 val renumbered = updatedPages.mapIndexed { idx, p ->
                                     p.copy(pageNumber = idx + 1)
@@ -541,7 +540,7 @@ fun YingJianNavHost(
                                     currentPage = cp.coerceAtMost((renumbered.size - 1).coerceAtLeast(0))
                                 )
                             } else {
-                                updatedPages[cp] = page.copy(elements = updatedElements)
+                                updatedPages[cp] = page.copy(slots = updatedSlots)
                                 loadedBookState = state.copy(pages = updatedPages)
                             }
                         }
@@ -550,10 +549,10 @@ fun YingJianNavHost(
                         loadedBookState?.let { state ->
                             val cp = state.currentPage
                             val page = state.pages.getOrNull(cp) ?: return@let
-                            val imageEl = page.elements.filterIsInstance<ImageElement>().firstOrNull() ?: return@let
+                            val imageRef = page.slots.firstOrNull { !it.isEmpty }?.imageRef ?: return@let
                             coroutineScope.launch {
                                 val memory = withContext(Dispatchers.IO) {
-                                    deps.memoryRepository.getMemoryById(imageEl.memoryId)
+                                    deps.memoryRepository.getMemoryById(imageRef.memoryId)
                                 }
                                 if (memory != null) {
                                     val paperSize = runCatching {
@@ -593,14 +592,12 @@ fun YingJianNavHost(
                             deps.photobookRepository.getPageLayouts(photobookId)
                         }
                         val pages = pageLayouts.map { layout ->
-                            val elements = try {
-                                ElementSerializer.deserialize(layout.elementsJson)
-                            } catch (e: Exception) {
-                                emptyList()
-                            }
+                            val document = PageLayoutDocumentSerializer.deserialize(layout.elementsJson)
                             PageState(
                                 pageNumber = layout.pageNumber,
-                                elements = elements,
+                                template = document.template,
+                                slots = document.slots,
+                                textElements = document.textElements,
                                 trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
                                 trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
                             )

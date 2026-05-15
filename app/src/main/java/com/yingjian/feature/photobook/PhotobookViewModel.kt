@@ -11,7 +11,7 @@ import com.yingjian.core.data.database.PageLayoutEntity
 import com.yingjian.core.data.database.PhotobookEntity
 import com.yingjian.core.data.repository.MemoryRepository
 import com.yingjian.core.data.repository.PhotobookRepository
-import com.yingjian.core.util.ElementSerializer
+import com.yingjian.core.util.PageLayoutDocumentSerializer
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.LayoutMode
@@ -87,7 +87,7 @@ class PhotobookViewModel(
                         PageLayoutEntity(
                             photobookId = bookId,
                             pageNumber = page.pageNumber,
-                            elementsJson = ElementSerializer.serialize(page.elements),
+                            elementsJson = PageLayoutDocumentSerializer.serialize(page.toDocument()),
                             mode = bookState.mode.name
                         )
                     )
@@ -227,7 +227,7 @@ class PhotobookViewModel(
                         PageLayoutEntity(
                             photobookId = currentState.photobook.id,
                             pageNumber = page.pageNumber,
-                            elementsJson = ElementSerializer.serialize(page.elements),
+                            elementsJson = PageLayoutDocumentSerializer.serialize(page.toDocument()),
                             mode = currentState.mode.name
                         )
                     )
