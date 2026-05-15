@@ -36,6 +36,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -54,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.PageTemplate
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,15 +73,20 @@ fun PhotobookEditorScreen(
     onNavigateToPreview: () -> Unit,
     onAddPhotos: () -> Unit,
     onSetCover: () -> Unit,
-    onDeleteImage: () -> Unit,
-    onResetImage: () -> Unit,
+    onChangeTemplate: (PageTemplate) -> Unit = {},
+    onMoveSelectedToPreviousPage: () -> Unit = {},
+    onMoveSelectedToNextPage: () -> Unit = {},
+    onMoveSelectedToNewPage: () -> Unit = {},
+    onSwapSelectedWithSlot: (String) -> Unit = {},
+    onFillSelectedSlot: () -> Unit = {},
+    onDeleteSelectedSlotImage: () -> Unit = {},
+    onResetSelectedSlotImage: () -> Unit = {},
     pageMoodText: String? = null,
     pageMemoryDate: Long? = null
 ) {
     val leafCount = bookState.pages.size + 2
     val maxLeafIndex = (leafCount - 1).coerceAtLeast(0)
     var currentLeafIndex by remember(bookState.photobook.id) { mutableIntStateOf(0) }
-    var isImageSelected by remember { mutableStateOf(false) }
     var showCoverSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -94,7 +103,6 @@ fun PhotobookEditorScreen(
     fun selectLeaf(targetIndex: Int) {
         val nextLeafIndex = targetIndex.coerceIn(0, maxLeafIndex)
         currentLeafIndex = nextLeafIndex
-        isImageSelected = false
 
         val contentPageIndex = nextLeafIndex - 1
         if (contentPageIndex in bookState.pages.indices) {
@@ -277,37 +285,51 @@ fun PhotobookEditorScreen(
 
             // Bottom toolbar — content pages only
             if (!isCoverLeaf && !isBackCoverLeaf && bookState.pages.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    if (isImageSelected) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            FilledTonalButton(onClick = {
-                                onDeleteImage()
-                                isImageSelected = false
-                            }) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("删除")
-                            }
-                            OutlinedButton(onClick = {
-                                onResetImage()
-                                isImageSelected = false
-                            }) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("重置")
-                            }
+                val cp = currentLeafIndex - 1
+                val currentPageState = bookState.pages.getOrNull(cp)
+
+                // Template selector
+                if (currentPageState != null) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        PageTemplate.entries.forEachIndexed { index, template ->
+                            SegmentedButton(
+                                selected = currentPageState.template == template,
+                                onClick = { onChangeTemplate(template) },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = PageTemplate.entries.size),
+                                label = {
+                                    Text(
+                                        when (template) {
+                                            PageTemplate.Single -> "单图"
+                                            PageTemplate.TwoHorizontal -> "上下"
+                                            PageTemplate.TwoVertical -> "左右"
+                                            PageTemplate.GridFour -> "四宫格"
+                                        }
+                                    )
+                                }
+                            )
                         }
-                    } else {
-                        FilledTonalButton(onClick = onAddPhotos) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("添加照片")
-                        }
+                    }
+                }
+
+                // Slot command row or add photos button
+                if (bookState.selectedSlotId != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        TextButton(onClick = onFillSelectedSlot) { Text("换图") }
+                        TextButton(onClick = onMoveSelectedToPreviousPage) { Text("上一页") }
+                        TextButton(onClick = onMoveSelectedToNextPage) { Text("下一页") }
+                        TextButton(onClick = onMoveSelectedToNewPage) { Text("新页") }
+                        TextButton(onClick = onDeleteSelectedSlotImage) { Text("删除") }
+                        TextButton(onClick = onResetSelectedSlotImage) { Text("重置") }
+                    }
+                } else {
+                    // Existing "添加照片" button
+                    FilledTonalButton(onClick = onAddPhotos) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("添加照片")
                     }
                 }
             }

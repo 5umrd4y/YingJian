@@ -30,11 +30,15 @@ import com.yingjian.feature.photobook.PhotobookEditorScreen
 import com.yingjian.feature.photobook.PhotobookPreviewScreen
 import com.yingjian.feature.photobook.PhotobookScreen
 import com.yingjian.feature.photobook.PhotobookViewModel
+import com.yingjian.feature.photobook.MoveResult
+import com.yingjian.feature.photobook.PhotobookSlotActions
+import com.yingjian.feature.photobook.TemplateChangeResult
 import com.yingjian.feature.photobook.export.PdfExportUtil
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
+import com.yingjian.feature.photobook.model.PageTemplate
 import com.yingjian.feature.photobook.model.PaperSize
 import com.yingjian.feature.settings.SettingsScreen
 import com.yingjian.feature.settings.AboutScreen
@@ -43,6 +47,7 @@ import com.yingjian.core.data.database.PageLayoutEntity
 import com.yingjian.core.util.PageLayoutDocumentSerializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.builtins.ListSerializer
@@ -461,6 +466,27 @@ fun YingJianNavHost(
                         }
                     }
 
+                    fun moveSelectedToPage(targetPageIndex: Int) {
+                        val state = loadedBookState ?: return
+                        val sourceIndex = state.currentPage
+                        val selectedSlotId = state.selectedSlotId ?: return
+                        val sourcePage = state.pages.getOrNull(sourceIndex) ?: return
+                        val targetPage = state.pages.getOrNull(targetPageIndex) ?: return
+                        if (targetPageIndex !in state.pages.indices) return
+                        when (val result = PhotobookSlotActions.moveImage(sourcePage, selectedSlotId, targetPage)) {
+                            is MoveResult.Moved -> {
+                                val pages = state.pages.toMutableList()
+                                pages[sourceIndex] = result.sourcePage
+                                pages[targetPageIndex] = result.targetPage
+                                loadedBookState = state.copy(pages = pages, currentPage = targetPageIndex, selectedSlotId = null)
+                            }
+                            MoveResult.SourceEmpty -> Unit
+                            MoveResult.TargetFull -> {
+                                loadedBookState = state
+                            }
+                        }
+                    }
+
                     PhotobookEditorScreen(
                         bookState = theBookState,
                     onUpdateState = { loadedBookState = it },
@@ -524,51 +550,88 @@ fun YingJianNavHost(
                             }
                         }
                     },
-                    onDeleteImage = {
-                        loadedBookState?.let { state ->
-                            val cp = state.currentPage
-                            val page = state.pages.getOrNull(cp) ?: return@let
-                            val updatedSlots = page.slots.map { it.copy(imageRef = null) }
-                            val updatedPages = state.pages.toMutableList()
-                            if (updatedSlots.all { it.isEmpty }) {
-                                updatedPages.removeAt(cp)
-                                val renumbered = updatedPages.mapIndexed { idx, p ->
-                                    p.copy(pageNumber = idx + 1)
-                                }
-                                loadedBookState = state.copy(
-                                    pages = renumbered,
-                                    currentPage = cp.coerceAtMost((renumbered.size - 1).coerceAtLeast(0))
-                                )
-                            } else {
-                                updatedPages[cp] = page.copy(slots = updatedSlots)
+                    onChangeTemplate = { newTemplate ->
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val pageIndex = state.currentPage
+                        val page = state.pages.getOrNull(pageIndex) ?: return@PhotobookEditorScreen
+                        when (val result = PhotobookSlotActions.changeTemplate(page, newTemplate)) {
+                            is TemplateChangeResult.Changed -> {
+                                val updatedPages = state.pages.toMutableList()
+                                updatedPages[pageIndex] = result.page
                                 loadedBookState = state.copy(pages = updatedPages)
+                            }
+                            is TemplateChangeResult.Overflow -> {
+                                loadedBookState = state
                             }
                         }
                     },
-                    onResetImage = {
-                        loadedBookState?.let { state ->
-                            val cp = state.currentPage
-                            val page = state.pages.getOrNull(cp) ?: return@let
-                            val imageRef = page.slots.firstOrNull { !it.isEmpty }?.imageRef ?: return@let
-                            coroutineScope.launch {
-                                val memory = withContext(Dispatchers.IO) {
-                                    deps.memoryRepository.getMemoryById(imageRef.memoryId)
-                                }
-                                if (memory != null) {
-                                    val paperSize = runCatching {
-                                        PaperSize.valueOf(state.photobook.paperSize)
-                                    }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
-                                    val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
-                                        memory = memory,
-                                        paperSize = paperSize,
-                                        pageNumber = page.pageNumber
-                                    )
-                                    val updatedPages = state.pages.toMutableList()
-                                    updatedPages[cp] = resetPage
-                                    loadedBookState = state.copy(pages = updatedPages)
-                                }
+                    onDeleteSelectedSlotImage = {
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val cp = state.currentPage
+                        val page = state.pages.getOrNull(cp) ?: return@PhotobookEditorScreen
+                        val selectedSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
+                        val updatedPages = state.pages.toMutableList()
+                        updatedPages[cp] = page.copy(
+                            slots = page.slots.map { slot ->
+                                if (slot.slotId == selectedSlotId) slot.copy(imageRef = null, cropScale = 1f, cropOffsetX = 0f, cropOffsetY = 0f) else slot
                             }
-                        }
+                        )
+                        loadedBookState = state.copy(pages = updatedPages, selectedSlotId = null)
+                    },
+                    onResetSelectedSlotImage = {
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val cp = state.currentPage
+                        val page = state.pages.getOrNull(cp) ?: return@PhotobookEditorScreen
+                        val selectedSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
+                        val slot = page.slots.firstOrNull { it.slotId == selectedSlotId && it.imageRef != null } ?: return@PhotobookEditorScreen
+                        val slotImageRef = slot.imageRef ?: return@PhotobookEditorScreen
+                        val memory = runBlocking { withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(slotImageRef.memoryId) } } ?: return@PhotobookEditorScreen
+                        val paperSize = runCatching { PaperSize.valueOf(state.photobook.paperSize) }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
+                        val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(memory, paperSize, page.pageNumber)
+                        val updatedPages = state.pages.toMutableList()
+                        updatedPages[cp] = resetPage.copy(
+                            slots = resetPage.slots.map { s -> if (s.slotId == selectedSlotId) s.copy(slotId = selectedSlotId) else s },
+                            template = page.template
+                        )
+                        loadedBookState = state.copy(pages = updatedPages, selectedSlotId = null)
+                    },
+                    onMoveSelectedToPreviousPage = {
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val target = state.currentPage - 1
+                        if (target in state.pages.indices) moveSelectedToPage(target)
+                    },
+                    onMoveSelectedToNextPage = {
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val target = state.currentPage + 1
+                        if (target in state.pages.indices) moveSelectedToPage(target)
+                    },
+                    onMoveSelectedToNewPage = {
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val pageIndex = state.currentPage
+                        val selectedSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
+                        val page = state.pages.getOrNull(pageIndex) ?: return@PhotobookEditorScreen
+                        val selected = page.slots.firstOrNull { it.slotId == selectedSlotId && it.imageRef != null } ?: return@PhotobookEditorScreen
+                        val clearedPage = page.copy(
+                            slots = page.slots.map { if (it.slotId == selectedSlotId) it.copy(imageRef = null, cropScale = 1f, cropOffsetX = 0f, cropOffsetY = 0f) else it }
+                        )
+                        val newPage = PageState(
+                            pageNumber = state.pages.size + 1,
+                            template = PageTemplate.Single,
+                            slots = listOf(selected.copy(slotId = "slot-1")),
+                            trimWidthMm = page.trimWidthMm,
+                            trimHeightMm = page.trimHeightMm,
+                            bleedMm = page.bleedMm
+                        )
+                        val pages = state.pages.toMutableList()
+                        pages[pageIndex] = clearedPage
+                        loadedBookState = state.copy(pages = pages + newPage, currentPage = pages.size, selectedSlotId = "slot-1")
+                    },
+                    onFillSelectedSlot = {
+                        // Opens the photo picker to fill the selected slot (will be wired in Task 8)
+                        // For now, do nothing
+                    },
+                    onSwapSelectedWithSlot = { _ ->
+                        // Will be implemented in Task 8
                     },
 	                    pageMoodText = currentMemory?.moodText,
 	                    pageMemoryDate = currentMemory?.timestamp
