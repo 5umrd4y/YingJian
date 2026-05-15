@@ -54,7 +54,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
-import com.yingjian.feature.photobook.model.ImageElement
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -196,30 +195,24 @@ fun PhotobookEditorScreen(
                                 containerWidthDp = 300.dp,
                                 moodText = pageMoodText,
                                 memoryDate = pageMemoryDate,
-                                isSelected = isImageSelected,
-                                onSelect = { isImageSelected = true },
-                                onDeselect = { isImageSelected = false },
-                                onImageAdjusted = { dxMm, dyMm, scaleChange ->
-                                    val imageEl = currentPageState.elements.filterIsInstance<ImageElement>().firstOrNull()
-                                        ?: return@PhotobookCanvasPage
-                                    val updatedElements = currentPageState.elements.map { element ->
-                                        if (element is ImageElement && element.memoryId == imageEl.memoryId) {
-                                            val aspectRatio = element.widthMm / element.heightMm
-                                            val updatedWidth = (element.widthMm * scaleChange)
-                                                .coerceIn(20f, currentPageState.trimWidthMm * 1.5f)
-                                            val updatedHeight = updatedWidth / aspectRatio
-                                            element.copy(
-                                                xMm = element.xMm + dxMm - (updatedWidth - element.widthMm) / 2f,
-                                                yMm = element.yMm + dyMm - (updatedHeight - element.heightMm) / 2f,
-                                                widthMm = updatedWidth,
-                                                heightMm = updatedHeight
-                                            )
-                                        } else element
-                                    }
-                                    val updatedPage = currentPageState.copy(elements = updatedElements)
+                                selectedSlotId = bookState.selectedSlotId,
+                                onSlotSelected = { slotId ->
                                     val updatedPages = bookState.pages.toMutableList()
-                                    updatedPages[cp] = updatedPage
-                                    onUpdateState(bookState.copy(pages = updatedPages, currentPage = cp))
+                                    updatedPages[cp] = currentPageState
+                                    onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId, currentPage = cp))
+                                },
+                                onSlotImageAdjusted = { slotId, offsetXMm, offsetYMm, scale ->
+                                    val updatedPages = bookState.pages.toMutableList()
+                                    updatedPages[cp] = currentPageState.copy(
+                                        slots = currentPageState.slots.map { slot ->
+                                            if (slot.slotId == slotId) {
+                                                slot.copy(cropOffsetX = offsetXMm, cropOffsetY = offsetYMm, cropScale = scale)
+                                            } else {
+                                                slot
+                                            }
+                                        }
+                                    )
+                                    onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId))
                                 },
                                 modifier = Modifier
                                     .fillMaxSize()

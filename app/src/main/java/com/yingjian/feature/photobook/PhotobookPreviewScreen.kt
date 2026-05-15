@@ -344,7 +344,7 @@ private fun PreviewLeaf(
         is PhotobookLeaf.Content -> PhotobookCanvasPage(
             pageState = leaf.page,
             containerWidthDp = containerWidthDp,
-            isSelected = false,
+            selectedSlotId = null,
             modifier = modifier
         )
         is PhotobookLeaf.BackCover -> BackCoverPreviewPage(
