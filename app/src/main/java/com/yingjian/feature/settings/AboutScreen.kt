@@ -1,12 +1,10 @@
 package com.yingjian.feature.settings
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -21,11 +19,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
 private val VERSION_HISTORY = listOf(
-    VersionEntry("1.0.3", "2026-05-15", "修复URI持久化（重启后图片不丢失）、心情文字按页关联、画册添加照片、图片居中、PDF页码；更换App Logo"),
     VersionEntry("1.0.2", "2026-05-13", "画册模块全面升级：285x210横版纸质封面、选择删除、手势编辑、翻页预览"),
     VersionEntry("1.0.1", "2026-05-12", "优化标签添加按钮和输入框布局对齐"),
     VersionEntry("1.0.0", "2026-05-10", "初始版本，支持影记、画册、设置功能")
@@ -63,21 +59,11 @@ fun AboutScreen(
                         .padding(24.dp),
                     horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                 ) {
-                    Row(
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        Image(
-                            painter = painterResource(id = com.yingjian.R.mipmap.ic_launcher),
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Text(
-                            "影笺",
-                            style = MaterialTheme.typography.displayLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 16.dp)
-                        )
-                    }
+                    Text(
+                        "影笺",
+                        style = MaterialTheme.typography.displayLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     Text(
                         "YingJian",
                         style = MaterialTheme.typography.labelLarge,
