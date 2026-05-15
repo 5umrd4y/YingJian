@@ -29,10 +29,11 @@ The target product is not a free-form canvas editor. It is a template-based phot
 ## Recommended Workflow
 
 1. Read `requirements.md`, then `spec.md`.
-2. Implement phase-by-phase from `plan.md`.
-3. Run the validation commands in `validation.md` after each major phase.
-4. Do not stage or revert unrelated worktree changes.
-5. When Claude finishes, ask Codex to review using `validation.md`.
+2. Use `plan.md` for phase overview.
+3. Use the strict implementation plan at `docs/superpowers/plans/2026-05-15-photobook-slot-layout-redesign.md` for task-by-task development.
+4. Run the validation commands in `validation.md` after each major phase.
+5. Do not stage or revert unrelated worktree changes.
+6. When Claude finishes, ask Codex to review using `validation.md`.
 
 ## Current Design Decision Summary
 
@@ -44,4 +45,3 @@ The target product is not a free-form canvas editor. It is a template-based phot
 - If a target page is full, ask the user to replace, change layout, move to a new page, or cancel.
 - Changing a page layout does not absorb photos from adjacent pages.
 - Editor, preview, and PDF must share one layout engine.
-
