@@ -352,24 +352,33 @@ fun YingJianNavHost(
         composable(NavDestinations.PhotoPicker.route) { backStackEntry ->
             val allMemories = rememberLoadedMemories(deps.memoryRepository)
             val isAppendMode = backStackEntry.savedStateHandle.get<String>("appendMode") == "true"
-            val mode = if (isAppendMode) MemoryPhotoPickerMode.BatchImport else MemoryPhotoPickerMode.BatchImport
+            val isFillSlotMode = backStackEntry.savedStateHandle.get<String>("fillSlotMode") == "true"
+            val mode = if (isFillSlotMode) MemoryPhotoPickerMode.SingleSlot else MemoryPhotoPickerMode.BatchImport
 
             PhotoPickerScreen(
                 memories = allMemories,
                 mode = mode,
                 onBack = { navController.popBackStack() },
                 onComplete = { selectedPhotos ->
-                    val encoded = SelectedMemoryPhotoCodec.encode(selectedPhotos)
-                    navController.previousBackStackEntry?.savedStateHandle?.apply {
-                        if (isAppendMode) {
-                            set("appendMemoryPhotos", encoded)
-                        } else {
-                            set("selectedMemoryPhotos", encoded)
+                    if (isFillSlotMode) {
+                        // Return fill slot result via savedStateHandle
+                        val encoded = SelectedMemoryPhotoCodec.encode(selectedPhotos)
+                        backStackEntry.savedStateHandle.set("fillSlotResult", encoded)
+                        backStackEntry.savedStateHandle.remove<String>("fillSlotMode")
+                        navController.popBackStack()
+                    } else {
+                        val encoded = SelectedMemoryPhotoCodec.encode(selectedPhotos)
+                        navController.previousBackStackEntry?.savedStateHandle?.apply {
+                            if (isAppendMode) {
+                                set("appendMemoryPhotos", encoded)
+                            } else {
+                                set("selectedMemoryPhotos", encoded)
+                            }
                         }
+                        backStackEntry.savedStateHandle.remove<String>("appendMode")
+                        backStackEntry.savedStateHandle.remove<String>("editorPhotobookId")
+                        navController.popBackStack()
                     }
-                    backStackEntry.savedStateHandle.remove<String>("appendMode")
-                    backStackEntry.savedStateHandle.remove<String>("editorPhotobookId")
-                    navController.popBackStack()
                 }
             )
         }
@@ -416,6 +425,8 @@ fun YingJianNavHost(
             }
 
             val pdfBytesState = remember { mutableStateOf<ByteArray?>(null) }
+            var isExportingPdf by remember { mutableStateOf(false) }
+            val editorSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
             val createPdf = rememberLauncherForActivityResult(
                 ActivityResultContracts.CreateDocument("application/pdf")
             ) { uri ->
@@ -427,6 +438,13 @@ fun YingJianNavHost(
                 }
             }
             val coroutineScope = rememberCoroutineScope()
+
+            // State for swap mode: when swap is initiated, track the source slot
+            var swapSourceSlotId by remember { mutableStateOf<String?>(null) }
+            var fillSlotState by remember { mutableStateOf<BookState?>(null) }
+            var fillSlotTargetSlotId by remember { mutableStateOf<String?>(null) }
+            var swapState by remember { mutableStateOf<BookState?>(null) }
+            var swapTargetSlotId by remember { mutableStateOf<String?>(null) }
 
             // Extract currentPage outside let so key() can wrap the mood lookup properly
             val theBookState = loadedBookState
@@ -445,12 +463,47 @@ fun YingJianNavHost(
                         }
                     }
 
+                    // Handle fill slot result: when returning from PhotoPicker in SingleSlot mode
+                    val fillSlotResultStr = backStackEntry.savedStateHandle.get<String>("fillSlotResult")
+                    LaunchedEffect(fillSlotResultStr) {
+                        if (fillSlotResultStr != null) {
+                            val photos = SelectedMemoryPhotoCodec.decode(fillSlotResultStr)
+                            val savedFillState = fillSlotState
+                            val targetSlotId = fillSlotTargetSlotId
+                            if (savedFillState != null && targetSlotId != null && photos.isNotEmpty()) {
+                                val photo = photos.first()
+                                val imageRef = com.yingjian.feature.photobook.model.ImageRef(
+                                    memoryId = photo.memoryId,
+                                    imageUri = photo.imageUri,
+                                    sourceImageIndex = photo.sourceImageIndex,
+                                    sourceImageId = photo.sourceImageId
+                                )
+                                val cp = savedFillState.currentPage
+                                val page = savedFillState.pages.getOrNull(cp)
+                                if (page != null) {
+                                    val updatedPages = savedFillState.pages.toMutableList()
+                                    updatedPages[cp] = page.copy(
+                                        slots = page.slots.map { slot ->
+                                            if (slot.slotId == targetSlotId) slot.copy(imageRef = imageRef, cropScale = 1f, cropOffsetX = 0f, cropOffsetY = 0f) else slot
+                                        }
+                                    )
+                                    loadedBookState = savedFillState.copy(pages = updatedPages, selectedSlotId = null)
+                                }
+                            }
+                            fillSlotState = null
+                            fillSlotTargetSlotId = null
+                            backStackEntry.savedStateHandle.remove<String>("fillSlotResult")
+                        }
+                    }
+
                     // Handle append mode: when returning from PhotoPicker with new photos
                     val appendPhotosStr = backStackEntry.savedStateHandle.get<String>("appendMemoryPhotos")
                     LaunchedEffect(appendPhotosStr) {
                         if (appendPhotosStr != null) {
                             val appendPhotos = SelectedMemoryPhotoCodec.decode(appendPhotosStr)
                             if (appendPhotos.isNotEmpty()) {
+                                // Sync loadedBookState into ViewModel so appendPhotosToBook can access it
+                                loadedBookState?.let { viewModel.updateBookState(it) }
                                 viewModel.appendPhotosToBook(appendPhotos)
                                 val vmState = viewModel.uiState.currentBookState
                                 if (vmState != null && vmState.photobook.id == photobookId) {
@@ -487,6 +540,9 @@ fun YingJianNavHost(
                             MoveResult.SourceEmpty -> Unit
                             MoveResult.TargetFull -> {
                                 loadedBookState = state
+                                coroutineScope.launch {
+                                    editorSnackbarHostState.showSnackbar("目标页面已满，无法移动")
+                                }
                             }
                         }
                     }
@@ -525,8 +581,20 @@ fun YingJianNavHost(
                         }
                     },
                     onExportPdf = {
-                        pdfBytesState.value = PdfExportUtil.exportPdf(context, theBookState)
-                        createPdf.launch("photobook.pdf")
+                        isExportingPdf = true
+                        coroutineScope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    PdfExportUtil.exportPdf(context, theBookState)
+                                }
+                            }.onSuccess { bytes ->
+                                pdfBytesState.value = bytes
+                                createPdf.launch("photobook.pdf")
+                            }.onFailure {
+                                editorSnackbarHostState.showSnackbar("导出失败，请重试")
+                            }
+                            isExportingPdf = false
+                        }
                     },
                     onNavigateToPreview = {
                         navController.navigate(NavDestinations.Preview.createRoute(theBookState.photobook.id))
@@ -565,7 +633,9 @@ fun YingJianNavHost(
                                 loadedBookState = state.copy(pages = updatedPages)
                             }
                             is TemplateChangeResult.Overflow -> {
-                                loadedBookState = state
+                                coroutineScope.launch {
+                                    editorSnackbarHostState.showSnackbar("图片过多，无法应用此版型")
+                                }
                             }
                         }
                     },
@@ -636,12 +706,25 @@ fun YingJianNavHost(
                         loadedBookState = state.copy(pages = pages + newPage, currentPage = pages.size, selectedSlotId = "slot-1")
                     },
                     onFillSelectedSlot = {
-                        // Opens the photo picker to fill the selected slot (will be wired in Task 8)
-                        // For now, do nothing
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val selectedSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
+                        fillSlotState = state
+                        fillSlotTargetSlotId = selectedSlotId
+                        navController.currentBackStackEntry?.savedStateHandle?.set("fillSlotMode", "true")
+                        navController.navigate(NavDestinations.PhotoPicker.route)
                     },
-                    onSwapSelectedWithSlot = { _ ->
-                        // Will be implemented in Task 8
+                    onSwapSelectedWithSlot = { targetSlotId ->
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val cp = state.currentPage
+                        val page = state.pages.getOrNull(cp) ?: return@PhotobookEditorScreen
+                        val srcSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
+                        if (srcSlotId == targetSlotId) return@PhotobookEditorScreen
+                        val updatedPages = state.pages.toMutableList()
+                        updatedPages[cp] = PhotobookSlotActions.swapSlots(page, srcSlotId, targetSlotId)
+                        loadedBookState = state.copy(pages = updatedPages, selectedSlotId = null)
                     },
+                    snackbarHostState = editorSnackbarHostState,
+                    isExportingPdf = isExportingPdf,
 	                    pageMoodText = currentMemory?.moodText,
 	                    pageMemoryDate = currentMemory?.timestamp
 	                )

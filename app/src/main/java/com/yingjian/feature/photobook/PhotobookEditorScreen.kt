@@ -82,7 +82,9 @@ fun PhotobookEditorScreen(
     onDeleteSelectedSlotImage: () -> Unit = {},
     onResetSelectedSlotImage: () -> Unit = {},
     pageMoodText: String? = null,
-    pageMemoryDate: Long? = null
+    pageMemoryDate: Long? = null,
+    snackbarHostState: androidx.compose.material3.SnackbarHostState? = null,
+    isExportingPdf: Boolean = false
 ) {
     val leafCount = bookState.pages.size + 2
     val maxLeafIndex = (leafCount - 1).coerceAtLeast(0)
@@ -111,7 +113,7 @@ fun PhotobookEditorScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(snackbarHostState ?: SnackbarHostState()) },
         topBar = {
             TopAppBar(
                 title = {
@@ -138,8 +140,21 @@ fun PhotobookEditorScreen(
                     IconButton(onClick = onNavigateToPreview) {
                         Icon(Icons.Default.Visibility, contentDescription = "预览")
                     }
-                    IconButton(onClick = onExportPdf) {
-                        Icon(Icons.Default.PictureAsPdf, contentDescription = "导出PDF")
+                    if (isExportingPdf) {
+                        Box(
+                            modifier = Modifier.padding(4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onExportPdf) {
+                            Icon(Icons.Default.PictureAsPdf, contentDescription = "导出PDF")
+                        }
                     }
                     IconButton(onClick = {
                         onSave()

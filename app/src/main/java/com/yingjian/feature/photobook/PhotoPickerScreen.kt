@@ -91,17 +91,40 @@ fun PhotoPickerScreen(
                 )
             }
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(memories) { memory ->
-                    val photos = memory.toSelectablePhotos()
-                    val allSelected = photos.all { photo ->
-                        selectedPhotos.any { it.memoryId == photo.memoryId && it.imageUri == photo.imageUri }
+            if (mode == MemoryPhotoPickerMode.SingleSlot) {
+                // SingleSlot mode: show every individual photo from all memories
+                val allPhotos = remember(memories) {
+                    memories.flatMap { it.toSelectablePhotos() }
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(allPhotos) { photo ->
+                        val isSelected = selectedPhotos.any { it.memoryId == photo.memoryId && it.imageUri == photo.imageUri }
+                        PhotoPickerGridItem(
+                            uri = photo.imageUri,
+                            isSelected = isSelected,
+                            onToggle = {
+                                selectedPhotos.clear()
+                                selectedPhotos.add(photo)
+                                onComplete(selectedPhotos.toList())
+                            }
+                        )
                     }
+                }
+            } else {
+                // BatchImport mode: one item per memory
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(memories) { memory ->
+                        val photos = memory.toSelectablePhotos()
+                        val allSelected = photos.all { photo ->
+                            selectedPhotos.any { it.memoryId == photo.memoryId && it.imageUri == photo.imageUri }
+                        }
 
-                    if (mode == MemoryPhotoPickerMode.BatchImport) {
                         PhotoGridItem(
                             memory = memory,
                             isSelected = allSelected,
@@ -116,22 +139,6 @@ fun PhotoPickerScreen(
                                             selectedPhotos.add(photo)
                                         }
                                     }
-                                }
-                            }
-                        )
-                    } else {
-                        // Single-slot mode
-                        val firstPhoto = photos.firstOrNull()
-                        PhotoGridItem(
-                            memory = memory,
-                            isSelected = firstPhoto != null && selectedPhotos.any {
-                                it.memoryId == firstPhoto.memoryId && it.imageUri == firstPhoto.imageUri
-                            },
-                            onToggle = {
-                                if (mode == MemoryPhotoPickerMode.SingleSlot && firstPhoto != null) {
-                                    selectedPhotos.clear()
-                                    selectedPhotos.add(firstPhoto)
-                                    onComplete(selectedPhotos.toList())
                                 }
                             }
                         )
@@ -159,6 +166,50 @@ fun PhotoPickerScreen(
                     modifier = Modifier.padding(horizontal = 8.dp),
                     color = MaterialTheme.colorScheme.onPrimary
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun PhotoPickerGridItem(
+    uri: String,
+    isSelected: Boolean,
+    onToggle: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .padding(1.dp)
+            .aspectRatio(1f)
+            .clickable(onClick = onToggle)
+    ) {
+        AsyncImage(
+            model = Uri.parse(uri),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.small),
+                contentAlignment = Alignment.TopEnd
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(4.dp),
+                    contentAlignment = Alignment.TopEnd
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
             }
         }
     }

@@ -41,6 +41,7 @@ object PdfExportUtil {
     private const val CROP_MARK_LENGTH_MM = 5f
     private const val CROP_MARK_STROKE_PT = 0.25f
     private const val PAGE_NUMBER_MARGIN_MM = 12f
+    private const val MAX_DECODE_DIMENSION_PX = 4096
 
     // PDF text color synced with design system onSurfaceVariant (#4c463e)
     private const val PDF_TEXT_COLOR = 0xFF4c463e.toInt()
@@ -216,63 +217,78 @@ object PdfExportUtil {
     }
 
     private fun renderImageSlot(context: Context, canvas: Canvas, rect: SlotRectMm, slot: ImageSlot) {
-        val imageRef = slot.imageRef ?: return
-        val uri = Uri.parse(imageRef.imageUri)
-        val inputStream = context.contentResolver.openInputStream(uri) ?: return
-        val targetWidthPx = mmToPx(rect.widthMm * slot.cropScale)
-        val targetHeightPx = mmToPx(rect.heightMm * slot.cropScale)
-        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeStream(inputStream, null, options)
-        inputStream.close()
+        runCatching {
+            val imageRef = slot.imageRef ?: return@runCatching
+            val uri = Uri.parse(imageRef.imageUri)
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return@runCatching
+            val targetWidthPx = mmToPx(rect.widthMm * slot.cropScale)
+            val targetHeightPx = mmToPx(rect.heightMm * slot.cropScale)
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeStream(inputStream, null, options)
+            inputStream.close()
 
-        val bitmapStream = context.contentResolver.openInputStream(uri)
-        val bitmap = BitmapFactory.decodeStream(
-            bitmapStream,
-            null,
-            BitmapFactory.Options().apply {
-                inSampleSize = calculateInSampleSize(options.outWidth, options.outHeight, targetWidthPx, targetHeightPx)
-            }
-        )
-        bitmapStream?.close()
-        if (bitmap == null) return
+            val inSampleSize = calculateInSampleSize(
+                options.outWidth, options.outHeight,
+                targetWidthPx, targetHeightPx,
+                MAX_DECODE_DIMENSION_PX
+            )
 
-        val x = mmToPxFloat(rect.xMm)
-        val y = mmToPxFloat(rect.yMm)
-        val w = mmToPxFloat(rect.widthMm)
-        val h = mmToPxFloat(rect.heightMm)
+            val bitmapStream = context.contentResolver.openInputStream(uri)
+            val bitmap = BitmapFactory.decodeStream(
+                bitmapStream,
+                null,
+                BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
+            )
+            bitmapStream?.close()
+            if (bitmap == null) return@runCatching
 
-        canvas.save()
-        canvas.clipRect(RectF(x, y, x + w, y + h))
-        val scaledW = w * slot.cropScale
-        val scaledH = h * slot.cropScale
-        val dx = mmToPxFloat(slot.cropOffsetX)
-        val dy = mmToPxFloat(slot.cropOffsetY)
-        val dest = RectF(
-            x - (scaledW - w) / 2f + dx,
-            y - (scaledH - h) / 2f + dy,
-            x + w + (scaledW - w) / 2f + dx,
-            y + h + (scaledH - h) / 2f + dy
-        )
-        canvas.drawBitmap(bitmap, null, dest, null)
-        canvas.restore()
-        bitmap.recycle()
+            val x = mmToPxFloat(rect.xMm)
+            val y = mmToPxFloat(rect.yMm)
+            val w = mmToPxFloat(rect.widthMm)
+            val h = mmToPxFloat(rect.heightMm)
+
+            canvas.save()
+            canvas.clipRect(RectF(x, y, x + w, y + h))
+            val scaledW = w * slot.cropScale
+            val scaledH = h * slot.cropScale
+            val dx = mmToPxFloat(slot.cropOffsetX)
+            val dy = mmToPxFloat(slot.cropOffsetY)
+            val dest = RectF(
+                x - (scaledW - w) / 2f + dx,
+                y - (scaledH - h) / 2f + dy,
+                x + w + (scaledW - w) / 2f + dx,
+                y + h + (scaledH - h) / 2f + dy
+            )
+            canvas.drawBitmap(bitmap, null, dest, null)
+            canvas.restore()
+            bitmap.recycle()
+        }
     }
 
     private fun calculateInSampleSize(
         reqWidth: Int,
         reqHeight: Int,
         targetWidth: Int,
-        targetHeight: Int
+        targetHeight: Int,
+        maxDecodeDim: Int = 4096
     ): Int {
+        // First ensure decoded bitmap doesn't exceed max dimension (prevents OOM)
         var inSampleSize = 1
+        if (reqWidth > maxDecodeDim || reqHeight > maxDecodeDim) {
+            val maxOriginal = maxOf(reqWidth, reqHeight)
+            inSampleSize = Integer.highestOneBit(maxOriginal / maxDecodeDim).coerceAtLeast(1)
+        }
+        // Then further downsample for the target size
         if (reqHeight > targetHeight || reqWidth > targetWidth) {
-            val halfHeight = reqHeight / 2
-            val halfWidth = reqWidth / 2
-            while ((halfHeight / inSampleSize) >= targetHeight &&
-                (halfWidth / inSampleSize) >= targetWidth
+            val halfHeight = reqHeight / (2 * inSampleSize)
+            val halfWidth = reqWidth / (2 * inSampleSize)
+            var inner = inSampleSize
+            while ((halfHeight / inner) >= targetHeight &&
+                (halfWidth / inner) >= targetWidth
             ) {
-                inSampleSize *= 2
+                inner *= 2
             }
+            inSampleSize = inner
         }
         return inSampleSize
     }
