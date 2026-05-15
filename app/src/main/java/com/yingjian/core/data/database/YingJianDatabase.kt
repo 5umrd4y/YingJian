@@ -65,6 +65,11 @@ data class PhotobookEntity(
     val name: String,
     val paperSize: String,
     val coverImageUri: String? = null,
+    val coverTitle: String? = null,
+    val coverSubtitle: String? = null,
+    val backTitle: String? = null,
+    val backSubtitle: String? = null,
+    val backDateText: String? = null,
     val createdAt: Long,
     val updatedAt: Long
 )
@@ -119,11 +124,12 @@ interface PageLayoutDao {
 @TypeConverters(Converters::class)
 @androidx.room.Database(
     entities = [MemoryRecordEntity::class, PhotobookEntity::class, PageLayoutEntity::class],
-    version = 4,
+    version = 5,
     autoMigrations = [
         androidx.room.AutoMigration(from = 1, to = 2),
         androidx.room.AutoMigration(from = 2, to = 3),
-        androidx.room.AutoMigration(from = 3, to = 4)
+        androidx.room.AutoMigration(from = 3, to = 4),
+        androidx.room.AutoMigration(from = 4, to = 5)
     ],
     exportSchema = true
 )

@@ -43,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +62,8 @@ import kotlinx.coroutines.launch
 fun PhotobookEditorScreen(
     bookState: BookState,
     onUpdateState: (BookState) -> Unit,
+    onUpdatePhotobook: (com.yingjian.core.data.database.PhotobookEntity) -> Unit,
+    onContentPageSelected: (Int) -> Unit,
     onBack: () -> Unit,
     onSave: () -> Unit,
     onExportPdf: () -> Unit,
@@ -72,25 +75,58 @@ fun PhotobookEditorScreen(
     pageMoodText: String? = null,
     pageMemoryDate: Long? = null
 ) {
-    var currentPage by remember { mutableIntStateOf(bookState.currentPage) }
+    val leafCount = bookState.pages.size + 2
+    val maxLeafIndex = (leafCount - 1).coerceAtLeast(0)
+    var currentLeafIndex by remember(bookState.photobook.id) { mutableIntStateOf(0) }
     var isImageSelected by remember { mutableStateOf(false) }
     var showCoverSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
+    val isCoverLeaf = currentLeafIndex == 0
+    val isBackCoverLeaf = currentLeafIndex == leafCount - 1
+
+    LaunchedEffect(maxLeafIndex) {
+        if (currentLeafIndex > maxLeafIndex) {
+            currentLeafIndex = maxLeafIndex
+        }
+    }
+
+    fun selectLeaf(targetIndex: Int) {
+        val nextLeafIndex = targetIndex.coerceIn(0, maxLeafIndex)
+        currentLeafIndex = nextLeafIndex
+        isImageSelected = false
+
+        val contentPageIndex = nextLeafIndex - 1
+        if (contentPageIndex in bookState.pages.indices) {
+            onContentPageSelected(contentPageIndex)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(bookState.photobook.name) },
+                title = {
+                    Text(
+                        when {
+                            isCoverLeaf -> "封面"
+                            isBackCoverLeaf -> "封底"
+                            else -> bookState.photobook.name
+                        }
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showCoverSheet = true }) {
-                        Icon(Icons.Default.Style, contentDescription = "设为封面")
+                    // Set cover: only enabled on content pages with an image
+                    if (!isCoverLeaf && !isBackCoverLeaf) {
+                        IconButton(onClick = { showCoverSheet = true }) {
+                            Icon(Icons.Default.Style, contentDescription = "设为封面")
+                        }
                     }
                     IconButton(onClick = onNavigateToPreview) {
                         Icon(Icons.Default.Visibility, contentDescription = "预览")
@@ -115,9 +151,9 @@ fun PhotobookEditorScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Animated page content
+            // Animated leaf content
             AnimatedContent(
-                targetState = currentPage,
+                targetState = currentLeafIndex,
                 transitionSpec = {
                     if (targetState > initialState) {
                         (slideInHorizontally { it } + fadeIn())
@@ -128,42 +164,73 @@ fun PhotobookEditorScreen(
                     }
                 },
                 modifier = Modifier.weight(1f)
-            ) { pageIndex ->
-                if (pageIndex in bookState.pages.indices) {
-                    val currentPageState = bookState.pages[pageIndex]
-                    PhotobookCanvasPage(
-                        pageState = currentPageState,
-                        containerWidthDp = 300.dp,
-                        moodText = pageMoodText,
-                        memoryDate = pageMemoryDate,
-                        isSelected = isImageSelected,
-                        onSelect = { isImageSelected = true },
-                        onDeselect = { isImageSelected = false },
-                        onImageAdjusted = { dxMm, dyMm, scaleChange ->
-                            val imageEl = currentPageState.elements.filterIsInstance<ImageElement>().firstOrNull() ?: return@PhotobookCanvasPage
-                            val updatedElements = currentPageState.elements.map { element ->
-                                if (element is ImageElement && element.memoryId == imageEl.memoryId) {
-                                    element.copy(
-                                        xMm = element.xMm + dxMm,
-                                        yMm = element.yMm + dyMm,
-                                        widthMm = element.widthMm * scaleChange,
-                                        heightMm = element.heightMm * scaleChange
-                                    )
-                                } else element
-                            }
-                            val updatedPage = currentPageState.copy(elements = updatedElements)
-                            val updatedPages = bookState.pages.toMutableList()
-                            updatedPages[pageIndex] = updatedPage
-                            onUpdateState(bookState.copy(pages = updatedPages, currentPage = pageIndex))
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    )
+            ) { leafIndex ->
+                when {
+                    leafIndex == 0 -> {
+                        // Cover page
+                        CoverEditorPage(
+                            photobook = bookState.photobook,
+                            onUpdatePhotobook = onUpdatePhotobook,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp)
+                        )
+                    }
+                    leafIndex == leafCount - 1 -> {
+                        // Back cover page
+                        BackCoverEditorPage(
+                            photobook = bookState.photobook,
+                            onUpdatePhotobook = onUpdatePhotobook,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp)
+                        )
+                    }
+                    else -> {
+                        // Content page
+                        val cp = leafIndex - 1
+                        if (cp in bookState.pages.indices) {
+                            val currentPageState = bookState.pages[cp]
+                            PhotobookCanvasPage(
+                                pageState = currentPageState,
+                                containerWidthDp = 300.dp,
+                                moodText = pageMoodText,
+                                memoryDate = pageMemoryDate,
+                                isSelected = isImageSelected,
+                                onSelect = { isImageSelected = true },
+                                onDeselect = { isImageSelected = false },
+                                onImageAdjusted = { dxMm, dyMm, scaleChange ->
+                                    val imageEl = currentPageState.elements.filterIsInstance<ImageElement>().firstOrNull()
+                                        ?: return@PhotobookCanvasPage
+                                    val updatedElements = currentPageState.elements.map { element ->
+                                        if (element is ImageElement && element.memoryId == imageEl.memoryId) {
+                                            val aspectRatio = element.widthMm / element.heightMm
+                                            val updatedWidth = (element.widthMm * scaleChange)
+                                                .coerceIn(20f, currentPageState.trimWidthMm * 1.5f)
+                                            val updatedHeight = updatedWidth / aspectRatio
+                                            element.copy(
+                                                xMm = element.xMm + dxMm - (updatedWidth - element.widthMm) / 2f,
+                                                yMm = element.yMm + dyMm - (updatedHeight - element.heightMm) / 2f,
+                                                widthMm = updatedWidth,
+                                                heightMm = updatedHeight
+                                            )
+                                        } else element
+                                    }
+                                    val updatedPage = currentPageState.copy(elements = updatedElements)
+                                    val updatedPages = bookState.pages.toMutableList()
+                                    updatedPages[cp] = updatedPage
+                                    onUpdateState(bookState.copy(pages = updatedPages, currentPage = cp))
+                                },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp)
+                            )
+                        }
+                    }
                 }
             }
 
-            // Page navigation
+            // Leaf navigation
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -172,27 +239,35 @@ fun PhotobookEditorScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { if (currentPage > 0) currentPage-- },
-                    enabled = currentPage > 0
+                    onClick = { selectLeaf(currentLeafIndex - 1) },
+                    enabled = currentLeafIndex > 0
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一页")
                 }
 
-                // Page indicator dots
+                // Leaf indicator dots
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(horizontal = 16.dp)
                 ) {
-                    bookState.pages.forEachIndexed { index, _ ->
+                    repeat(leafCount) { index ->
+                        val dotType = when (index) {
+                            0 -> LeafType.Cover
+                            leafCount - 1 -> LeafType.BackCover
+                            else -> LeafType.Content
+                        }
                         Box(
                             modifier = Modifier
                                 .size(
-                                    width = if (index == currentPage) 16.dp else 6.dp,
+                                    width = if (index == currentLeafIndex) 16.dp else 6.dp,
                                     height = 6.dp
                                 )
                                 .background(
-                                    if (index == currentPage) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                    if (index == currentLeafIndex) MaterialTheme.colorScheme.primary
+                                    else when (dotType) {
+                                        LeafType.Cover, LeafType.BackCover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                        LeafType.Content -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    },
                                     CircleShape
                                 )
                         )
@@ -200,15 +275,15 @@ fun PhotobookEditorScreen(
                 }
 
                 IconButton(
-                    onClick = { if (currentPage < bookState.pages.size - 1) currentPage++ },
-                    enabled = currentPage < bookState.pages.size - 1
+                    onClick = { selectLeaf(currentLeafIndex + 1) },
+                    enabled = currentLeafIndex < leafCount - 1
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一页")
                 }
             }
 
-            // Bottom toolbar
-            if (bookState.pages.isNotEmpty()) {
+            // Bottom toolbar — content pages only
+            if (!isCoverLeaf && !isBackCoverLeaf && bookState.pages.isNotEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -286,3 +361,5 @@ fun PhotobookEditorScreen(
         }
     }
 }
+
+private enum class LeafType { Cover, Content, BackCover }

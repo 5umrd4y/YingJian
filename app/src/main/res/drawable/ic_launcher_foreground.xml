@@ -13,11 +13,21 @@
         android:fillColor="#FFFFFF"
         android:fillAlpha="0.1"
         android:pathData="M33.75,40.04 L74.25,40.04 L74.25,73.79 L33.75,73.79 Z"/>
+    <path
+        android:fillColor="#8C7E6C"
+        android:fillAlpha="0.16"
+        android:pathData="M33.75,67.5 L74.25,67.5 L74.25,73.79 L33.75,73.79 Z"/>
     <!-- "YJ" monogram strokes -->
     <path
-        android:fillColor="#A69B8F"
-        android:pathData="M43.59,50 L55.83,50 L55.83,51.27 L43.59,51.27 Z"/>
+        android:fillColor="#00000000"
+        android:pathData="M43.59,50.63 L55.83,50.63"
+        android:strokeColor="#A69B8F"
+        android:strokeLineCap="round"
+        android:strokeWidth="2.53"/>
     <path
-        android:fillColor="#A69B8F"
-        android:pathData="M43.59,56.32 L51.18,56.32 L51.18,57.59 L43.59,57.59 Z"/>
+        android:fillColor="#00000000"
+        android:pathData="M43.59,56.95 L51.18,56.95"
+        android:strokeColor="#A69B8F"
+        android:strokeLineCap="round"
+        android:strokeWidth="2.53"/>
 </vector>

@@ -9,8 +9,14 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
-import android.text.TextPaint
 import android.net.Uri
+import android.text.StaticLayout
+import android.text.TextPaint
+import com.yingjian.feature.photobook.displayBackDateText
+import com.yingjian.feature.photobook.displayBackSubtitle
+import com.yingjian.feature.photobook.displayBackTitle
+import com.yingjian.feature.photobook.displayCoverSubtitle
+import com.yingjian.feature.photobook.displayCoverTitle
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.ImageElement
 import com.yingjian.feature.photobook.model.PageState
@@ -21,11 +27,10 @@ import java.io.ByteArrayOutputStream
 /**
  * Exports a BookState to a 300DPI PDF with crop marks.
  *
- * Process:
- * 1. Create PdfDocument.Page at 300DPI for each page
- * 2. Draw white background
- * 3. Draw each PageElement (ImageElement with inSampleSize, TextElement with Noto Sans SC or system fallback)
- * 4. Draw crop marks at 4 corners (5mm black 0.25pt lines)
+ * Page order:
+ * 1. Cover page (with title/subtitle/optional image)
+ * 2. Content pages (images + text + page numbers)
+ * 3. Back cover page (with title/subtitle/date text)
  */
 object PdfExportUtil {
 
@@ -36,6 +41,7 @@ object PdfExportUtil {
 
     // PDF text color synced with design system onSurfaceVariant (#4c463e)
     private const val PDF_TEXT_COLOR = 0xFF4c463e.toInt()
+    private const val PDF_GRAY_TEXT_COLOR = 0xFF9E9E9E.toInt()
 
     fun exportPdf(context: Context, bookState: BookState): ByteArray {
         val document = PdfDocument()
@@ -54,15 +60,23 @@ object PdfExportUtil {
         val pageWidthPx = mmToPx(paperSize.widthMm)
         val pageHeightPx = mmToPx(paperSize.heightMm)
 
+        // 1. Cover page
+        val coverPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, 1).create()
+        val coverPage = document.startPage(coverPageInfo)
+        coverPage.canvas.drawColor(0xFFFAF9F6.toInt())
+        renderCoverPage(context, coverPage.canvas, bookState, paperSize, typeface)
+        drawCropMarks(coverPage.canvas, pageWidthPx, pageHeightPx)
+        document.finishPage(coverPage)
+
+        // 2. Content pages
         bookState.pages.forEachIndexed { index, pageState ->
-            val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, index + 1).create()
+            val pageNum = index + 2 // cover is page 1
+            val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, pageNum).create()
             val page = document.startPage(pageInfo)
             val canvas = page.canvas
 
-            // Paper background (#FAF9F6)
             canvas.drawColor(0xFFFAF9F6.toInt())
 
-            // Render elements sorted by zIndex
             val sortedElements = pageState.elements.sortedBy { it.zIndex }
             sortedElements.forEach { element ->
                 when (element) {
@@ -71,14 +85,20 @@ object PdfExportUtil {
                 }
             }
 
-            // Crop marks
             drawCropMarks(canvas, pageWidthPx, pageHeightPx)
-
-            // Page number (bottom-right, matching editor display)
             drawPageNumber(canvas, pageState.pageNumber, pageWidthPx, pageHeightPx)
 
             document.finishPage(page)
         }
+
+        // 3. Back cover page
+        val backPageNum = bookState.pages.size + 2
+        val backPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, backPageNum).create()
+        val backPage = document.startPage(backPageInfo)
+        backPage.canvas.drawColor(0xFFFAF9F6.toInt())
+        renderBackPage(backPage.canvas, bookState, paperSize, typeface)
+        drawCropMarks(backPage.canvas, pageWidthPx, pageHeightPx)
+        document.finishPage(backPage)
 
         val outputStream = ByteArrayOutputStream()
         document.writeTo(outputStream)
@@ -89,11 +109,152 @@ object PdfExportUtil {
     private fun mmToPx(mm: Float): Int = (mm * DPI / 25.4f).toInt()
     private fun mmToPxFloat(mm: Float): Float = mm * DPI / 25.4f
 
+    private fun renderCoverPage(
+        context: Context,
+        canvas: Canvas,
+        bookState: BookState,
+        paperSize: PaperSize,
+        typeface: Typeface
+    ) {
+        val photobook = bookState.photobook
+
+        // Render cover image if set
+        photobook.coverImageUri?.let { uriString ->
+            runCatching {
+                val uri = Uri.parse(uriString)
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeStream(inputStream, null, options)
+                    inputStream.close()
+
+                    val imageAreaWidthMm = paperSize.widthMm * 0.7f
+                    val imageAreaHeightMm = paperSize.heightMm * 0.5f
+                    val targetWidthPx = mmToPx(imageAreaWidthMm)
+                    val targetHeightPx = mmToPx(imageAreaHeightMm)
+
+                    val inSampleSize = calculateInSampleSize(
+                        options.outWidth, options.outHeight,
+                        targetWidthPx, targetHeightPx
+                    )
+
+                    val bitmapStream = context.contentResolver.openInputStream(uri)
+                    val bitmap = BitmapFactory.decodeStream(bitmapStream, null, BitmapFactory.Options().apply { this.inSampleSize = inSampleSize })
+                    bitmapStream?.close()
+
+                    if (bitmap != null) {
+                        val bitmapAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
+                        var drawWidthMm = imageAreaWidthMm
+                        var drawHeightMm = drawWidthMm / bitmapAspect
+                        if (drawHeightMm > imageAreaHeightMm) {
+                            drawHeightMm = imageAreaHeightMm
+                            drawWidthMm = drawHeightMm * bitmapAspect
+                        }
+
+                        val areaXMm = (paperSize.widthMm - imageAreaWidthMm) / 2
+                        val areaYMm = paperSize.heightMm * 0.1f
+                        val x = mmToPxFloat(areaXMm + (imageAreaWidthMm - drawWidthMm) / 2)
+                        val y = mmToPxFloat(areaYMm + (imageAreaHeightMm - drawHeightMm) / 2)
+                        val w = mmToPxFloat(drawWidthMm)
+                        val h = mmToPxFloat(drawHeightMm)
+                        canvas.drawBitmap(bitmap, null, RectF(x, y, x + w, y + h), null)
+                        bitmap.recycle()
+                    }
+                }
+            }
+        }
+
+        // Cover title
+        val titleText = photobook.displayCoverTitle()
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = mmToPxFloat(10f)
+            color = PDF_TEXT_COLOR
+            textAlign = Paint.Align.CENTER
+        }
+        val titleY = if (photobook.coverImageUri != null) {
+            mmToPxFloat(paperSize.heightMm * 0.65f)
+        } else {
+            mmToPxFloat(paperSize.heightMm * 0.45f)
+        }
+        val centerX = mmToPxFloat(paperSize.widthMm / 2)
+
+        val titleWidth = mmToPxFloat(paperSize.widthMm * 0.7f).toInt()
+        val titleLeft = (mmToPxFloat(paperSize.widthMm) - titleWidth) / 2f
+        val titleLayout = StaticLayout.Builder
+            .obtain(titleText, 0, titleText.length, titlePaint, titleWidth)
+            .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
+            .setLineSpacing(0f, 1.3f)
+            .setIncludePad(false)
+            .build()
+
+        canvas.save()
+        canvas.translate(titleLeft, titleY)
+        titleLayout.draw(canvas)
+        canvas.restore()
+
+        // Cover subtitle
+        val subtitleText = photobook.displayCoverSubtitle()
+        val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = mmToPxFloat(7f)
+            color = PDF_TEXT_COLOR
+            textAlign = Paint.Align.CENTER
+        }
+        val subtitleY = titleY + titleLayout.height + mmToPxFloat(5f)
+
+        canvas.drawText(subtitleText, centerX, subtitleY, subtitlePaint)
+    }
+
+    private fun renderBackPage(
+        canvas: Canvas,
+        bookState: BookState,
+        paperSize: PaperSize,
+        typeface: Typeface
+    ) {
+        val photobook = bookState.photobook
+        val centerX = mmToPxFloat(paperSize.widthMm / 2)
+        var y = mmToPxFloat(paperSize.heightMm * 0.4f)
+
+        // Back title
+        val titleText = photobook.displayBackTitle()
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = mmToPxFloat(9f)
+            color = PDF_TEXT_COLOR
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(titleText, centerX, y, titlePaint)
+        y += mmToPxFloat(12f)
+
+        // Back subtitle
+        val subtitleText = photobook.displayBackSubtitle()
+        val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = mmToPxFloat(7f)
+            color = PDF_TEXT_COLOR
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(subtitleText, centerX, y, subtitlePaint)
+
+        // Back date text (optional)
+        val dateText = photobook.displayBackDateText()
+        if (dateText.isNotBlank()) {
+            y += mmToPxFloat(10f)
+            val datePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.typeface = typeface
+                textSize = mmToPxFloat(6f)
+                color = PDF_GRAY_TEXT_COLOR
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText(dateText, centerX, y, datePaint)
+        }
+    }
+
     private fun renderImage(context: Context, canvas: Canvas, element: ImageElement) {
         val uri = Uri.parse(element.imageUri)
         val inputStream = context.contentResolver.openInputStream(uri) ?: return
 
-        // Calculate inSampleSize to avoid OOM
         val targetWidthPx = mmToPx(element.widthMm)
         val targetHeightPx = mmToPx(element.heightMm)
 
@@ -172,7 +333,7 @@ object PdfExportUtil {
         val textWidthPx = mmToPxFloat(element.widthMm)
         val text = element.text
 
-        val staticLayout = android.text.StaticLayout.Builder
+        val staticLayout = StaticLayout.Builder
             .obtain(text, 0, text.length, paint, textWidthPx.toInt())
             .setAlignment(
                 when (element.textAlign) {
@@ -207,10 +368,8 @@ object PdfExportUtil {
         }
         val cropPx = mmToPxFloat(CROP_MARK_LENGTH_MM)
 
-        // Top-left
         canvas.drawLine(0f, 0f, cropPx, 0f, paint)
         canvas.drawLine(0f, 0f, 0f, cropPx, paint)
-        // Top-right
         canvas.drawLine(
             pageWidthPx.toFloat(), 0f,
             pageWidthPx - cropPx, 0f, paint
@@ -219,7 +378,6 @@ object PdfExportUtil {
             pageWidthPx.toFloat(), 0f,
             pageWidthPx.toFloat(), cropPx, paint
         )
-        // Bottom-left
         canvas.drawLine(
             0f, pageHeightPx.toFloat(),
             cropPx, pageHeightPx.toFloat(), paint
@@ -228,7 +386,6 @@ object PdfExportUtil {
             0f, pageHeightPx.toFloat(),
             0f, pageHeightPx - cropPx, paint
         )
-        // Bottom-right
         canvas.drawLine(
             pageWidthPx.toFloat(), pageHeightPx.toFloat(),
             pageWidthPx - cropPx, pageHeightPx.toFloat(), paint
@@ -247,7 +404,7 @@ object PdfExportUtil {
     ) {
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = 11f * DPI / 25.4f
-            color = 0xFF9E9E9E.toInt() // outlineVariant-like gray
+            color = PDF_GRAY_TEXT_COLOR
             textAlign = Paint.Align.RIGHT
             typeface = Typeface.DEFAULT
         }

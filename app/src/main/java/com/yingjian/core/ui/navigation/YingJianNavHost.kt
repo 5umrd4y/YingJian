@@ -12,7 +12,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -428,9 +427,7 @@ fun YingJianNavHost(
             val currentPage = theBookState?.currentPage ?: 0
 
             if (theBookState != null) {
-                // Load mood/date from memory for current page — keyed to page index
-                // to force recreation when switching pages (AnimatedContent preserves compositions)
-                key(currentPage) {
+                // Load mood/date from memory for current content page.
                     val currentPageState = theBookState.pages.getOrNull(currentPage)
                     val currentImageElement = currentPageState?.elements?.filterIsInstance<ImageElement>()?.firstOrNull()
                     val currentMemory by produceState<MemoryRecordEntity?>(
@@ -470,6 +467,12 @@ fun YingJianNavHost(
                     PhotobookEditorScreen(
                         bookState = theBookState,
                     onUpdateState = { loadedBookState = it },
+                    onUpdatePhotobook = { updatedPhotobook ->
+                        loadedBookState = loadedBookState?.copy(photobook = updatedPhotobook.copy(updatedAt = System.currentTimeMillis()))
+                    },
+                    onContentPageSelected = { pageIndex ->
+                        loadedBookState = loadedBookState?.copy(currentPage = pageIndex)
+                    },
                     onBack = { navController.popBackStack() },
                     onSave = {
                         val currentState = loadedBookState
@@ -559,8 +562,7 @@ fun YingJianNavHost(
                                     val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
                                         memory = memory,
                                         paperSize = paperSize,
-                                        pageNumber = page.pageNumber,
-                                        imageUri = imageEl.imageUri
+                                        pageNumber = page.pageNumber
                                     )
                                     val updatedPages = state.pages.toMutableList()
                                     updatedPages[cp] = resetPage
@@ -569,11 +571,10 @@ fun YingJianNavHost(
                             }
                         }
                     },
-                    pageMoodText = currentMemory?.moodText,
-                    pageMemoryDate = currentMemory?.timestamp
-                )
-            } // end key(currentPage)
-        } else {
+	                    pageMoodText = currentMemory?.moodText,
+	                    pageMemoryDate = currentMemory?.timestamp
+	                )
+	        } else {
             androidx.compose.material3.Text("Loading...")
         }
         }
