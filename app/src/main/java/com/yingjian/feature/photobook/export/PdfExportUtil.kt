@@ -17,8 +17,11 @@ import com.yingjian.feature.photobook.displayBackSubtitle
 import com.yingjian.feature.photobook.displayBackTitle
 import com.yingjian.feature.photobook.displayCoverSubtitle
 import com.yingjian.feature.photobook.displayCoverTitle
+import com.yingjian.feature.photobook.layout.LayoutInput
+import com.yingjian.feature.photobook.layout.SlotRectMm
+import com.yingjian.feature.photobook.layout.TemplateLayoutEngine
 import com.yingjian.feature.photobook.model.BookState
-import com.yingjian.feature.photobook.model.ImageElement
+import com.yingjian.feature.photobook.model.ImageSlot
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
 import com.yingjian.feature.photobook.model.TextElement
@@ -77,12 +80,23 @@ object PdfExportUtil {
 
             canvas.drawColor(0xFFFAF9F6.toInt())
 
-            val sortedElements = pageState.elements.sortedBy { it.zIndex }
-            sortedElements.forEach { element ->
-                when (element) {
-                    is ImageElement -> renderImage(context, canvas, element)
-                    is TextElement -> renderText(canvas, element, typeface)
+            val slotRects = TemplateLayoutEngine.calculateSlots(
+                LayoutInput(
+                    trimWidthMm = pageState.trimWidthMm,
+                    trimHeightMm = pageState.trimHeightMm,
+                    bleedMm = pageState.bleedMm,
+                    safeMarginMm = 16f,
+                    template = pageState.template
+                )
+            )
+            slotRects.forEach { rect ->
+                val slot = pageState.slots.firstOrNull { it.slotId == rect.slotId }
+                if (slot?.imageRef != null) {
+                    renderImageSlot(context, canvas, rect, slot)
                 }
+            }
+            pageState.textElements.sortedBy { it.zIndex }.forEach { element ->
+                renderText(canvas, element, typeface)
             }
 
             drawCropMarks(canvas, pageWidthPx, pageHeightPx)
@@ -118,52 +132,6 @@ object PdfExportUtil {
     ) {
         val photobook = bookState.photobook
 
-        // Render cover image if set
-        photobook.coverImageUri?.let { uriString ->
-            runCatching {
-                val uri = Uri.parse(uriString)
-                val inputStream = context.contentResolver.openInputStream(uri)
-                if (inputStream != null) {
-                    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeStream(inputStream, null, options)
-                    inputStream.close()
-
-                    val imageAreaWidthMm = paperSize.widthMm * 0.7f
-                    val imageAreaHeightMm = paperSize.heightMm * 0.5f
-                    val targetWidthPx = mmToPx(imageAreaWidthMm)
-                    val targetHeightPx = mmToPx(imageAreaHeightMm)
-
-                    val inSampleSize = calculateInSampleSize(
-                        options.outWidth, options.outHeight,
-                        targetWidthPx, targetHeightPx
-                    )
-
-                    val bitmapStream = context.contentResolver.openInputStream(uri)
-                    val bitmap = BitmapFactory.decodeStream(bitmapStream, null, BitmapFactory.Options().apply { this.inSampleSize = inSampleSize })
-                    bitmapStream?.close()
-
-                    if (bitmap != null) {
-                        val bitmapAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
-                        var drawWidthMm = imageAreaWidthMm
-                        var drawHeightMm = drawWidthMm / bitmapAspect
-                        if (drawHeightMm > imageAreaHeightMm) {
-                            drawHeightMm = imageAreaHeightMm
-                            drawWidthMm = drawHeightMm * bitmapAspect
-                        }
-
-                        val areaXMm = (paperSize.widthMm - imageAreaWidthMm) / 2
-                        val areaYMm = paperSize.heightMm * 0.1f
-                        val x = mmToPxFloat(areaXMm + (imageAreaWidthMm - drawWidthMm) / 2)
-                        val y = mmToPxFloat(areaYMm + (imageAreaHeightMm - drawHeightMm) / 2)
-                        val w = mmToPxFloat(drawWidthMm)
-                        val h = mmToPxFloat(drawHeightMm)
-                        canvas.drawBitmap(bitmap, null, RectF(x, y, x + w, y + h), null)
-                        bitmap.recycle()
-                    }
-                }
-            }
-        }
-
         // Cover title
         val titleText = photobook.displayCoverTitle()
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -172,11 +140,7 @@ object PdfExportUtil {
             color = PDF_TEXT_COLOR
             textAlign = Paint.Align.CENTER
         }
-        val titleY = if (photobook.coverImageUri != null) {
-            mmToPxFloat(paperSize.heightMm * 0.65f)
-        } else {
-            mmToPxFloat(paperSize.heightMm * 0.45f)
-        }
+        val titleY = mmToPxFloat(paperSize.heightMm * 0.45f)
         val centerX = mmToPxFloat(paperSize.widthMm / 2)
 
         val titleWidth = mmToPxFloat(paperSize.widthMm * 0.7f).toInt()
@@ -251,47 +215,46 @@ object PdfExportUtil {
         }
     }
 
-    private fun renderImage(context: Context, canvas: Canvas, element: ImageElement) {
-        val uri = Uri.parse(element.imageUri)
+    private fun renderImageSlot(context: Context, canvas: Canvas, rect: SlotRectMm, slot: ImageSlot) {
+        val imageRef = slot.imageRef ?: return
+        val uri = Uri.parse(imageRef.imageUri)
         val inputStream = context.contentResolver.openInputStream(uri) ?: return
-
-        val targetWidthPx = mmToPx(element.widthMm)
-        val targetHeightPx = mmToPx(element.heightMm)
-
-        val options = BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
-        }
+        val targetWidthPx = mmToPx(rect.widthMm * slot.cropScale)
+        val targetHeightPx = mmToPx(rect.heightMm * slot.cropScale)
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeStream(inputStream, null, options)
         inputStream.close()
 
-        val inSampleSize = calculateInSampleSize(
-            options.outWidth, options.outHeight,
-            targetWidthPx, targetHeightPx
-        )
-
-        val bitmapOptions = BitmapFactory.Options().apply {
-            this.inSampleSize = inSampleSize
-        }
         val bitmapStream = context.contentResolver.openInputStream(uri)
-        val bitmap = BitmapFactory.decodeStream(bitmapStream, null, bitmapOptions)
+        val bitmap = BitmapFactory.decodeStream(
+            bitmapStream,
+            null,
+            BitmapFactory.Options().apply {
+                inSampleSize = calculateInSampleSize(options.outWidth, options.outHeight, targetWidthPx, targetHeightPx)
+            }
+        )
         bitmapStream?.close()
-
         if (bitmap == null) return
 
-        val x = mmToPxFloat(element.xMm)
-        val y = mmToPxFloat(element.yMm)
-        val w = mmToPxFloat(element.widthMm)
-        val h = mmToPxFloat(element.heightMm)
+        val x = mmToPxFloat(rect.xMm)
+        val y = mmToPxFloat(rect.yMm)
+        val w = mmToPxFloat(rect.widthMm)
+        val h = mmToPxFloat(rect.heightMm)
 
-        if (element.rotationDeg != 0f) {
-            canvas.save()
-            canvas.rotate(element.rotationDeg, x + w / 2, y + h / 2)
-            canvas.drawBitmap(bitmap, null, RectF(x, y, x + w, y + h), null)
-            canvas.restore()
-        } else {
-            canvas.drawBitmap(bitmap, null, RectF(x, y, x + w, y + h), null)
-        }
-
+        canvas.save()
+        canvas.clipRect(RectF(x, y, x + w, y + h))
+        val scaledW = w * slot.cropScale
+        val scaledH = h * slot.cropScale
+        val dx = mmToPxFloat(slot.cropOffsetX)
+        val dy = mmToPxFloat(slot.cropOffsetY)
+        val dest = RectF(
+            x - (scaledW - w) / 2f + dx,
+            y - (scaledH - h) / 2f + dy,
+            x + w + (scaledW - w) / 2f + dx,
+            y + h + (scaledH - h) / 2f + dy
+        )
+        canvas.drawBitmap(bitmap, null, dest, null)
+        canvas.restore()
         bitmap.recycle()
     }
 
