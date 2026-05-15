@@ -136,3 +136,23 @@ object ElementSerializer {
         else -> TextAlign.Start
     }
 }
+
+internal fun TextElementDto.toDomain(): TextElement = TextElement(
+    text = text,
+    fontSizeMm = fontSizeMm,
+    textAlign = when (textAlign) {
+        "Left" -> TextAlign.Left
+        "Right" -> TextAlign.Right
+        "Center" -> TextAlign.Center
+        "Justify" -> TextAlign.Justify
+        "Start" -> TextAlign.Start
+        "End" -> TextAlign.End
+        else -> TextAlign.Center
+    },
+    xMm = xMm,
+    yMm = yMm,
+    widthMm = widthMm,
+    heightMm = heightMm,
+    rotationDeg = rotationDeg,
+    zIndex = zIndex
+)
