@@ -4,14 +4,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Simple camera aperture icon -->
+    <!-- Main white rectangle (book/paper symbol) -->
     <path
-        android:fillColor="#ffffff"
-        android:pathData="M54,24 L60,36 L72,36 L63,45 L66,57 L54,51 L42,57 L45,45 L36,36 L48,36 Z"
-        android:strokeWidth="0"/>
-    <!-- Circle drawn as path (circle element not supported in vector drawables) -->
+        android:fillColor="#FFFFFF"
+        android:pathData="M29.53,33.75 L70.03,33.75 L70.03,67.5 L29.53,67.5 Z"/>
+    <!-- Translucent overlay rectangle (layered pages) -->
     <path
-        android:fillColor="#ffffff"
-        android:pathData="M54,58 A8,8 0 1,0 54,74 A8,8 0 1,0 54,58 Z"
-        android:strokeWidth="0"/>
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.1"
+        android:pathData="M33.75,40.04 L74.25,40.04 L74.25,73.79 L33.75,73.79 Z"/>
+    <!-- "YJ" monogram strokes -->
+    <path
+        android:fillColor="#A69B8F"
+        android:pathData="M43.59,50 L55.83,50 L55.83,51.27 L43.59,51.27 Z"/>
+    <path
+        android:fillColor="#A69B8F"
+        android:pathData="M43.59,56.32 L51.18,56.32 L51.18,57.59 L43.59,57.59 Z"/>
 </vector>
