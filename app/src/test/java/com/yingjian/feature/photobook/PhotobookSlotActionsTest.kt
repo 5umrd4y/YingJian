@@ -6,6 +6,7 @@ import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PageTemplate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PhotobookSlotActionsTest {
@@ -42,6 +43,58 @@ class PhotobookSlotActionsTest {
         val result = PhotobookSlotActions.moveImage(source, "slot-1", target)
 
         assertEquals(MoveResult.TargetFull, result)
+    }
+
+    @Test
+    fun `switching grid to single keeps inactive slot images`() {
+        val page = page(
+            PageTemplate.GridFour,
+            listOf(slot("slot-1", 1), slot("slot-2", 2), slot("slot-3", 3), slot("slot-4", 4))
+        )
+
+        val result = PhotobookSlotActions.changeTemplate(page, PageTemplate.SingleLandscape)
+
+        val changed = result as TemplateChangeResult.Changed
+        assertEquals(PageTemplate.SingleLandscape, changed.page.template)
+        assertEquals(4, changed.page.slots.size)
+        assertEquals("content://image/1", changed.page.slots.first { it.slotId == "slot-1" }.imageRef?.imageUri)
+        assertEquals("content://image/2", changed.page.slots.first { it.slotId == "slot-2" }.imageRef?.imageUri)
+    }
+
+    @Test
+    fun `visible slots only returns active template slots`() {
+        val page = page(
+            PageTemplate.SingleLandscape,
+            listOf(slot("slot-1", 1), slot("slot-2", 2))
+        )
+
+        val visible = PhotobookSlotActions.visibleSlots(page)
+
+        assertEquals(listOf("slot-1"), visible.map { it.slotId })
+    }
+
+    @Test
+    fun `fill slot updates exact target slot`() {
+        val page = page(PageTemplate.GridFour, listOf(empty("slot-1"), empty("slot-2"), empty("slot-3"), empty("slot-4")))
+
+        val updated = PhotobookSlotActions.fillSlot(page, "slot-3", ImageRef(9, "content://image/9", 0))
+
+        assertEquals("content://image/9", updated.slots.first { it.slotId == "slot-3" }.imageRef?.imageUri)
+        assertNull(updated.slots.first { it.slotId == "slot-1" }.imageRef)
+    }
+
+    @Test
+    fun `insert page after current renumbers pages`() {
+        val pages = listOf(
+            page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 1)), pageNumber = 1),
+            page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 2)), pageNumber = 2)
+        )
+        val newPage = PhotobookSlotActions.emptyPage(pageNumber = 0, template = PageTemplate.SingleLandscape)
+
+        val updated = PhotobookSlotActions.insertPageAfter(pages, currentPageIndex = 0, newPage = newPage)
+
+        assertEquals(listOf(1, 2, 3), updated.map { it.pageNumber })
+        assertTrue(updated[1].slots.single().isEmpty)
     }
 
     private fun page(template: PageTemplate, slots: List<ImageSlot>, pageNumber: Int = 1) = PageState(
