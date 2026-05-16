@@ -4,17 +4,17 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -25,22 +25,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
-import androidx.compose.ui.unit.Dp
 import com.yingjian.feature.photobook.model.CoverLayout
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PhotobookLayoutDefaults
@@ -73,7 +69,12 @@ fun PhotobookPreviewScreen(
             LocalConfiguration.current.screenHeightDp
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF30312F))) {
-        // Floating top bar
+        if (isLandscape) {
+            LandscapeSpreadView(leaves = leaves)
+        } else {
+            PortraitSinglePageView(leaves = leaves)
+        }
+
         TopAppBar(
             title = { },
             navigationIcon = {
@@ -98,12 +99,6 @@ fun PhotobookPreviewScreen(
                 containerColor = Color.Transparent
             )
         )
-
-        if (isLandscape) {
-            LandscapeSpreadView(leaves = leaves)
-        } else {
-            PortraitSinglePageView(leaves = leaves)
-        }
     }
 }
 
@@ -123,17 +118,19 @@ private fun PortraitSinglePageView(leaves: List<PhotobookLeaf>) {
             state = pagerState,
             modifier = Modifier.weight(1f)
         ) { page ->
-            Box(
-                modifier = Modifier.fillMaxSize(),
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp, vertical = 56.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val pageSize = PhotobookPreviewLayout.fitSinglePage(maxWidth.value, maxHeight.value)
                 PreviewLeaf(
                     leaf = leaves[page],
-                    containerWidthDp = 200.dp,
+                    pageWidthDp = pageSize.pageWidthDp.dp,
                     modifier = Modifier
-                        .fillMaxSize(0.85f)
-                        .shadow(4.dp, RoundedCornerShape(2.dp))
-                        .clip(RoundedCornerShape(2.dp))
+                        .size(pageSize.pageWidthDp.dp, pageSize.pageHeightDp.dp)
+                        .shadow(10.dp)
                 )
             }
         }
@@ -164,7 +161,10 @@ private fun PortraitSinglePageView(leaves: List<PhotobookLeaf>) {
                     }
                     Box(
                         modifier = Modifier
-                            .width(if (index == pagerState.currentPage) 16.dp else 6.dp)
+                            .size(
+                                width = if (index == pagerState.currentPage) 16.dp else 6.dp,
+                                height = 6.dp
+                            )
                             .background(
                                 if (index == pagerState.currentPage) Color.White
                                 else when (dotType) {
@@ -207,68 +207,78 @@ private fun LandscapeSpreadView(leaves: List<PhotobookLeaf>) {
             state = pagerState,
             modifier = Modifier.weight(1f)
         ) { spreadIndex ->
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 32.dp, vertical = 16.dp),
+                    .padding(horizontal = 32.dp, vertical = 44.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Row(
+                val spreadSize = PhotobookPreviewLayout.fitSpread(maxWidth.value, maxHeight.value)
+                Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .aspectRatio(2.7f),
-                    verticalAlignment = Alignment.CenterVertically
+                        .size(spreadSize.spreadWidthDp.dp, spreadSize.spreadHeightDp.dp)
+                        .shadow(24.dp)
                 ) {
-                    // Left page
-                    val leftIndex = spreadIndex * 2
-                    if (leftIndex < leaves.size) {
-                        PreviewLeaf(
-                            leaf = leaves[leftIndex],
-                            containerWidthDp = 150.dp,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
-                    } else {
-                        Box(modifier = Modifier.weight(1f).fillMaxHeight())
-                    }
-
-                    // Spine
-                    Box(
-                        modifier = Modifier.width(40.dp).fillMaxHeight()
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val centerX = size.width / 2
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.15f),
-                                        Color.Transparent
-                                    ),
-                                    startX = centerX - 20.dp.toPx(),
-                                    endX = centerX + 20.dp.toPx()
-                                ),
-                                topLeft = Offset(centerX - 20.dp.toPx(), 0f),
-                                size = androidx.compose.ui.geometry.Size(40.dp.toPx(), size.height)
+                        val leftIndex = spreadIndex * 2
+                        if (leftIndex < leaves.size) {
+                            PreviewLeaf(
+                                leaf = leaves[leftIndex],
+                                pageWidthDp = spreadSize.pageWidthDp.dp,
+                                modifier = Modifier
+                                    .width(spreadSize.pageWidthDp.dp)
+                                    .fillMaxHeight()
                             )
-                            drawLine(
-                                Color.White.copy(alpha = 0.3f),
-                                Offset(centerX, 0f),
-                                Offset(centerX, size.height),
-                                1.dp.toPx()
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .width(spreadSize.pageWidthDp.dp)
+                                    .fillMaxHeight()
+                            )
+                        }
+
+                        val rightIndex = spreadIndex * 2 + 1
+                        if (rightIndex < leaves.size) {
+                            PreviewLeaf(
+                                leaf = leaves[rightIndex],
+                                pageWidthDp = spreadSize.pageWidthDp.dp,
+                                modifier = Modifier
+                                    .width(spreadSize.pageWidthDp.dp)
+                                    .fillMaxHeight()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .width(spreadSize.pageWidthDp.dp)
+                                    .fillMaxHeight()
                             )
                         }
                     }
 
-                    // Right page
-                    val rightIndex = spreadIndex * 2 + 1
-                    if (rightIndex < leaves.size) {
-                        PreviewLeaf(
-                            leaf = leaves[rightIndex],
-                            containerWidthDp = 150.dp,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val centerX = size.width / 2
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.18f),
+                                    Color.Transparent
+                                ),
+                                startX = centerX - 24.dp.toPx(),
+                                endX = centerX + 24.dp.toPx()
+                            ),
+                            topLeft = Offset(centerX - 24.dp.toPx(), 0f),
+                            size = androidx.compose.ui.geometry.Size(48.dp.toPx(), size.height)
                         )
-                    } else {
-                        Box(modifier = Modifier.weight(1f).fillMaxHeight())
+                        drawLine(
+                            Color.White.copy(alpha = 0.28f),
+                            Offset(centerX, 0f),
+                            Offset(centerX, size.height),
+                            1.dp.toPx()
+                        )
                     }
                 }
             }
@@ -295,7 +305,10 @@ private fun LandscapeSpreadView(leaves: List<PhotobookLeaf>) {
                 repeat(spreadCount) { index ->
                     Box(
                         modifier = Modifier
-                            .width(if (index == pagerState.currentPage) 16.dp else 6.dp)
+                            .size(
+                                width = if (index == pagerState.currentPage) 16.dp else 6.dp,
+                                height = 6.dp
+                            )
                             .background(
                                 if (index == pagerState.currentPage) Color.White
                                 else Color.White.copy(alpha = 0.3f),
@@ -321,23 +334,16 @@ private fun LandscapeSpreadView(leaves: List<PhotobookLeaf>) {
 @Composable
 private fun PreviewLeaf(
     leaf: PhotobookLeaf,
-    containerWidthDp: Dp,
+    pageWidthDp: Dp,
     modifier: Modifier = Modifier
 ) {
-    // Compute scaleFactor based on the standard 285x210 page size
-    val containerWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-        containerWidthDp.roundToPx()
-    }
-    val pageWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-        PhotobookLayoutDefaults.PAGE_WIDTH_MM.dp.roundToPx()
-    }
-    val scaleFactor = containerWidthPx.toFloat() / pageWidthPx.toFloat()
-
     when (leaf) {
         is PhotobookLeaf.Cover -> PhotobookStage(
             modifier = modifier,
-            maxWidth = containerWidthDp,
-            backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR)
+            maxWidth = pageWidthDp,
+            backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR),
+            shadowElevation = 0.dp,
+            cornerRadius = 0.dp
         ) { stageScale ->
             CoverPageRenderer(
                 layout = leaf.layout,
@@ -349,8 +355,10 @@ private fun PreviewLeaf(
         }
         is PhotobookLeaf.Content -> PhotobookStage(
             modifier = modifier,
-            maxWidth = containerWidthDp,
-            backgroundColor = Color(PhotobookLayoutDefaults.CONTENT_PAGE_COLOR)
+            maxWidth = pageWidthDp,
+            backgroundColor = Color(PhotobookLayoutDefaults.CONTENT_PAGE_COLOR),
+            shadowElevation = 0.dp,
+            cornerRadius = 0.dp
         ) { stageScale ->
             ContentPageRenderer(
                 pageState = leaf.page,
@@ -363,8 +371,10 @@ private fun PreviewLeaf(
         }
         is PhotobookLeaf.BackCover -> PhotobookStage(
             modifier = modifier,
-            maxWidth = containerWidthDp,
-            backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR)
+            maxWidth = pageWidthDp,
+            backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR),
+            shadowElevation = 0.dp,
+            cornerRadius = 0.dp
         ) { stageScale ->
             CoverPageRenderer(
                 layout = leaf.layout,

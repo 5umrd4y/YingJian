@@ -21,16 +21,19 @@ fun PhotobookStage(
     modifier: Modifier = Modifier,
     maxWidth: Dp = 340.dp,
     backgroundColor: Color = Color(PhotobookLayoutDefaults.CONTENT_PAGE_COLOR),
+    shadowElevation: Dp = 4.dp,
+    cornerRadius: Dp = 4.dp,
     content: @Composable BoxScope.(scaleFactor: Float) -> Unit
 ) {
     val scaleFactor = maxWidth.value / PhotobookLayoutDefaults.PAGE_WIDTH_MM
+    val shape = RoundedCornerShape(cornerRadius)
     Box(
         modifier = modifier
             .widthIn(max = maxWidth)
             .fillMaxWidth()
             .aspectRatio(PhotobookLayoutDefaults.PAGE_WIDTH_MM / PhotobookLayoutDefaults.PAGE_HEIGHT_MM)
-            .shadow(4.dp, RoundedCornerShape(4.dp))
-            .clip(RoundedCornerShape(4.dp))
+            .shadow(shadowElevation, shape)
+            .clip(shape)
             .background(backgroundColor)
     ) {
         content(scaleFactor)
