@@ -511,11 +511,7 @@ fun YingJianNavHost(
                                 val page = savedFillState.pages.getOrNull(cp)
                                 if (page != null) {
                                     val updatedPages = savedFillState.pages.toMutableList()
-                                    updatedPages[cp] = page.copy(
-                                        slots = page.slots.map { slot ->
-                                            if (slot.slotId == targetSlotId) slot.copy(imageRef = imageRef, cropScale = 1f, cropOffsetX = 0f, cropOffsetY = 0f) else slot
-                                        }
-                                    )
+                                    updatedPages[cp] = PhotobookSlotActions.fillSlot(page, targetSlotId, imageRef)
                                     loadedBookState = savedFillState.copy(pages = updatedPages, selectedSlotId = null)
                                 }
                             }
@@ -727,7 +723,7 @@ fun YingJianNavHost(
                         )
                         val newPage = PageState(
                             pageNumber = state.pages.size + 1,
-                            template = PageTemplate.SingleLandscape,
+                            template = selected.imageRef?.let { PhotobookSlotActions.singleTemplateFor(it) } ?: PageTemplate.SingleLandscape,
                             slots = listOf(selected.copy(slotId = "slot-1")),
                             trimWidthMm = page.trimWidthMm,
                             trimHeightMm = page.trimHeightMm,

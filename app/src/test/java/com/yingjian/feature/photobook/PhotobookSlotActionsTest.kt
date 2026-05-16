@@ -84,6 +84,46 @@ class PhotobookSlotActionsTest {
     }
 
     @Test
+    fun `fill single slot switches to portrait template for portrait image`() {
+        val page = page(PageTemplate.SingleLandscape, listOf(empty("slot-1")))
+
+        val updated = PhotobookSlotActions.fillSlot(
+            page,
+            "slot-1",
+            ImageRef(
+                memoryId = 9,
+                imageUri = "content://image/portrait",
+                sourceImageIndex = 0,
+                imageWidth = 800,
+                imageHeight = 1200
+            )
+        )
+
+        assertEquals(PageTemplate.SinglePortrait, updated.template)
+        assertEquals("content://image/portrait", updated.slots.single().imageRef?.imageUri)
+    }
+
+    @Test
+    fun `fill single slot switches to landscape template for landscape image`() {
+        val page = page(PageTemplate.SinglePortrait, listOf(empty("slot-1")))
+
+        val updated = PhotobookSlotActions.fillSlot(
+            page,
+            "slot-1",
+            ImageRef(
+                memoryId = 9,
+                imageUri = "content://image/landscape",
+                sourceImageIndex = 0,
+                imageWidth = 1200,
+                imageHeight = 800
+            )
+        )
+
+        assertEquals(PageTemplate.SingleLandscape, updated.template)
+        assertEquals("content://image/landscape", updated.slots.single().imageRef?.imageUri)
+    }
+
+    @Test
     fun `insert page after current renumbers pages`() {
         val pages = listOf(
             page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 1)), pageNumber = 1),

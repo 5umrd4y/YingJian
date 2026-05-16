@@ -20,6 +20,17 @@ object PhotobookSlotActions {
     fun emptySlotsFor(template: PageTemplate): List<ImageSlot> =
         template.slotIds.map { ImageSlot(slotId = it, imageRef = null) }
 
+    fun singleTemplateFor(imageRef: ImageRef, fallback: PageTemplate = PageTemplate.SingleLandscape): PageTemplate {
+        val width = imageRef.imageWidth ?: return fallback
+        val height = imageRef.imageHeight ?: return fallback
+        if (width <= 0 || height <= 0) return fallback
+        return if (width.toFloat() / height.toFloat() >= 1f) {
+            PageTemplate.SingleLandscape
+        } else {
+            PageTemplate.SinglePortrait
+        }
+    }
+
     fun changeTemplate(page: PageState, newTemplate: PageTemplate): TemplateChangeResult {
         val existingById = page.slots.associateBy { it.slotId }
         val activeSlots = newTemplate.slotIds.map { slotId ->
@@ -35,13 +46,18 @@ object PhotobookSlotActions {
         }
 
     fun fillSlot(page: PageState, slotId: String, imageRef: ImageRef): PageState {
+        val nextTemplate = if (page.template == PageTemplate.SingleLandscape || page.template == PageTemplate.SinglePortrait) {
+            singleTemplateFor(imageRef, fallback = page.template)
+        } else {
+            page.template
+        }
         val existing = page.slots.associateBy { it.slotId }
         val updated = existing[slotId]?.copy(imageRef = imageRef, cropScale = 1f, cropOffsetX = 0f, cropOffsetY = 0f)
             ?: ImageSlot(slotId = slotId, imageRef = imageRef)
         val allSlots = page.slots.filterNot { it.slotId == slotId } + updated
-        val activeSlots = page.template.slotIds.map { id -> allSlots.first { it.slotId == id } }
-        val inactiveSlots = allSlots.filterNot { it.slotId in page.template.slotIds }
-        return page.copy(slots = activeSlots + inactiveSlots)
+        val activeSlots = nextTemplate.slotIds.map { id -> allSlots.first { it.slotId == id } }
+        val inactiveSlots = allSlots.filterNot { it.slotId in nextTemplate.slotIds }
+        return page.copy(template = nextTemplate, slots = activeSlots + inactiveSlots)
     }
 
     fun clearSlot(page: PageState, slotId: String): PageState = page.copy(
