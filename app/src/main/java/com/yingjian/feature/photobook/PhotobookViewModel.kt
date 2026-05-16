@@ -76,16 +76,21 @@ class PhotobookViewModel(
                 }.toMap()
             }
             val pages = selectedPhotos.mapIndexed { index, photo ->
+                val imageRef = ImageRef(
+                    memoryId = photo.memoryId,
+                    imageUri = photo.imageUri,
+                    sourceImageIndex = photo.sourceImageIndex,
+                    sourceImageId = photo.sourceImageId,
+                    imageWidth = photo.imageWidth,
+                    imageHeight = photo.imageHeight
+                )
                 AutoLayoutAlgorithm.createSinglePhotoPage(
-                    imageRef = ImageRef(
-                        memoryId = photo.memoryId,
-                        imageUri = photo.imageUri,
-                        sourceImageIndex = photo.sourceImageIndex,
-                        sourceImageId = photo.sourceImageId
-                    ),
+                    imageRef = imageRef,
                     moodText = memoryById[photo.memoryId]?.moodText,
                     paperSize = paperSize,
-                    pageNumber = index + 1
+                    pageNumber = index + 1,
+                    imageWidth = photo.imageWidth,
+                    imageHeight = photo.imageHeight
                 )
             }
             val bookState = BookState(
@@ -215,16 +220,21 @@ class PhotobookViewModel(
             }
             val startPageNumber = currentState.pages.size + 1
             val newPages = selectedPhotos.mapIndexed { index, photo ->
+                val imageRef = ImageRef(
+                    memoryId = photo.memoryId,
+                    imageUri = photo.imageUri,
+                    sourceImageIndex = photo.sourceImageIndex,
+                    sourceImageId = photo.sourceImageId,
+                    imageWidth = photo.imageWidth,
+                    imageHeight = photo.imageHeight
+                )
                 AutoLayoutAlgorithm.createSinglePhotoPage(
-                    imageRef = ImageRef(
-                        memoryId = photo.memoryId,
-                        imageUri = photo.imageUri,
-                        sourceImageIndex = photo.sourceImageIndex,
-                        sourceImageId = photo.sourceImageId
-                    ),
+                    imageRef = imageRef,
                     moodText = memoryById[photo.memoryId]?.moodText,
                     paperSize = paperSize,
-                    pageNumber = startPageNumber + index
+                    pageNumber = startPageNumber + index,
+                    imageWidth = photo.imageWidth,
+                    imageHeight = photo.imageHeight
                 )
             }
             val updatedState = currentState.copy(

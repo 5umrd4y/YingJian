@@ -1,12 +1,15 @@
 package com.yingjian.feature.photobook.layout
 
 import com.yingjian.feature.photobook.model.PageTemplate
+import com.yingjian.feature.photobook.model.PhotobookLayoutDefaults
 
 data class LayoutInput(
     val trimWidthMm: Float,
     val trimHeightMm: Float,
     val bleedMm: Float,
     val safeMarginMm: Float,
+    val bottomTextReserveMm: Float = PhotobookLayoutDefaults.BOTTOM_TEXT_RESERVE_MM,
+    val gutterMm: Float = PhotobookLayoutDefaults.GUTTER_MM,
     val template: PageTemplate
 )
 
@@ -19,44 +22,54 @@ data class SlotRectMm(
 )
 
 object TemplateLayoutEngine {
-    private const val GUTTER_MM = 8f
-    private const val BOTTOM_TEXT_RESERVE_MM = 20f
 
     fun calculateSlots(input: LayoutInput): List<SlotRectMm> {
-        val left = maxOf(input.bleedMm, input.safeMarginMm)
-        val top = maxOf(input.bleedMm, input.safeMarginMm)
-        val right = input.trimWidthMm - maxOf(input.bleedMm, input.safeMarginMm)
-        val bottom = input.trimHeightMm - maxOf(input.bleedMm, input.safeMarginMm) - BOTTOM_TEXT_RESERVE_MM
-        val width = right - left
-        val height = bottom - top
+        val contentX = input.safeMarginMm
+        val contentY = input.safeMarginMm
+        val contentWidth = input.trimWidthMm - input.safeMarginMm * 2f
+        val contentHeight = input.trimHeightMm - input.safeMarginMm * 2f - input.bottomTextReserveMm
+
+        fun centered(widthMm: Float, heightMm: Float, slotId: String = "slot-1") = SlotRectMm(
+            slotId = slotId,
+            xMm = contentX + (contentWidth - widthMm) / 2f,
+            yMm = contentY + (contentHeight - heightMm) / 2f,
+            widthMm = widthMm,
+            heightMm = heightMm
+        )
 
         return when (input.template) {
-            PageTemplate.SingleLandscape,
-            PageTemplate.SinglePortrait -> listOf(
-                SlotRectMm("slot-1", left, top, width, height)
-            )
+            PageTemplate.SingleLandscape -> {
+                val width = kotlin.math.min(contentWidth, contentHeight * 1.5f)
+                val height = width / 1.5f
+                listOf(centered(width, height))
+            }
+            PageTemplate.SinglePortrait -> {
+                val height = kotlin.math.min(contentHeight, contentWidth * 1.5f)
+                val width = height * (2f / 3f)
+                listOf(centered(width, height))
+            }
             PageTemplate.TwoHorizontal -> {
-                val slotHeight = (height - GUTTER_MM) / 2f
+                val slotHeight = (contentHeight - input.gutterMm) / 2f
                 listOf(
-                    SlotRectMm("slot-1", left, top, width, slotHeight),
-                    SlotRectMm("slot-2", left, top + slotHeight + GUTTER_MM, width, slotHeight)
+                    SlotRectMm("slot-1", contentX, contentY, contentWidth, slotHeight),
+                    SlotRectMm("slot-2", contentX, contentY + slotHeight + input.gutterMm, contentWidth, slotHeight)
                 )
             }
             PageTemplate.TwoVertical -> {
-                val slotWidth = (width - GUTTER_MM) / 2f
+                val slotWidth = (contentWidth - input.gutterMm) / 2f
                 listOf(
-                    SlotRectMm("slot-1", left, top, slotWidth, height),
-                    SlotRectMm("slot-2", left + slotWidth + GUTTER_MM, top, slotWidth, height)
+                    SlotRectMm("slot-1", contentX, contentY, slotWidth, contentHeight),
+                    SlotRectMm("slot-2", contentX + slotWidth + input.gutterMm, contentY, slotWidth, contentHeight)
                 )
             }
             PageTemplate.GridFour -> {
-                val slotWidth = (width - GUTTER_MM) / 2f
-                val slotHeight = (height - GUTTER_MM) / 2f
+                val slotWidth = (contentWidth - input.gutterMm) / 2f
+                val slotHeight = (contentHeight - input.gutterMm) / 2f
                 listOf(
-                    SlotRectMm("slot-1", left, top, slotWidth, slotHeight),
-                    SlotRectMm("slot-2", left + slotWidth + GUTTER_MM, top, slotWidth, slotHeight),
-                    SlotRectMm("slot-3", left, top + slotHeight + GUTTER_MM, slotWidth, slotHeight),
-                    SlotRectMm("slot-4", left + slotWidth + GUTTER_MM, top + slotHeight + GUTTER_MM, slotWidth, slotHeight)
+                    SlotRectMm("slot-1", contentX, contentY, slotWidth, slotHeight),
+                    SlotRectMm("slot-2", contentX + slotWidth + input.gutterMm, contentY, slotWidth, slotHeight),
+                    SlotRectMm("slot-3", contentX, contentY + slotHeight + input.gutterMm, slotWidth, slotHeight),
+                    SlotRectMm("slot-4", contentX + slotWidth + input.gutterMm, contentY + slotHeight + input.gutterMm, slotWidth, slotHeight)
                 )
             }
         }

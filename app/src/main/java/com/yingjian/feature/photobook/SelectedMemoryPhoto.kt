@@ -15,7 +15,9 @@ data class SelectedMemoryPhoto(
     val memoryId: Long,
     val imageUri: String,
     val sourceImageIndex: Int?,
-    val sourceImageId: Long? = null
+    val sourceImageId: Long? = null,
+    val imageWidth: Int? = null,
+    val imageHeight: Int? = null
 )
 
 object SelectedMemoryPhotoCodec {
@@ -34,7 +36,9 @@ fun MemoryRecordEntity.toSelectablePhotos(): List<SelectedMemoryPhoto> {
         SelectedMemoryPhoto(
             memoryId = id,
             imageUri = uri,
-            sourceImageIndex = index
+            sourceImageIndex = index,
+            imageWidth = imageWidth,
+            imageHeight = imageHeight
         )
     }
 }

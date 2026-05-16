@@ -12,17 +12,9 @@ import com.yingjian.feature.photobook.model.PaperSize
 import com.yingjian.feature.photobook.model.TextElement
 
 /**
- * MVP Auto Layout: one image per page, centered fit, with mood text below.
- *
- * Algorithm:
- * - For each MemoryRecord, create one page
- * - Image: Fit Center within trim area, respecting 3mm bleed margin
- * - Text: Fixed position near bottom of page (heightMm - 22mm)
- * - Bleed safety: image stays within trim - bleed area
+ * Auto Layout: one image per page, template chosen by image aspect ratio.
  */
 object AutoLayoutAlgorithm {
-
-    private const val BLEED_MM = 3f
 
     fun layout(
         memories: List<MemoryRecordEntity>,
@@ -30,24 +22,26 @@ object AutoLayoutAlgorithm {
         photobook: PhotobookEntity
     ): BookState {
         val pages = memories.mapIndexed { index, memory ->
-            val page = PageState(
+            val imageRef = ImageRef(
+                memoryId = memory.id,
+                imageUri = memory.imageUri,
+                sourceImageIndex = 0,
+                imageWidth = memory.imageWidth,
+                imageHeight = memory.imageHeight
+            )
+            PageState(
                 pageNumber = index + 1,
-                template = PageTemplate.SingleLandscape,
+                template = chooseSingleTemplate(memory.imageWidth, memory.imageHeight),
                 slots = listOf(
                     ImageSlot(
                         slotId = "slot-1",
-                        imageRef = ImageRef(
-                            memoryId = memory.id,
-                            imageUri = memory.imageUri,
-                            sourceImageIndex = 0
-                        )
+                        imageRef = imageRef
                     )
                 ),
                 textElements = buildMoodTextElements(memory, paperSize),
                 trimWidthMm = paperSize.widthMm,
                 trimHeightMm = paperSize.heightMm
             )
-            page
         }
 
         return BookState(
@@ -62,10 +56,12 @@ object AutoLayoutAlgorithm {
         imageRef: ImageRef,
         moodText: String?,
         paperSize: PaperSize,
-        pageNumber: Int
+        pageNumber: Int,
+        imageWidth: Int? = imageRef.imageWidth,
+        imageHeight: Int? = imageRef.imageHeight
     ): PageState = PageState(
         pageNumber = pageNumber,
-        template = PageTemplate.SingleLandscape,
+        template = chooseSingleTemplate(imageWidth, imageHeight),
         slots = listOf(ImageSlot(slotId = "slot-1", imageRef = imageRef)),
         textElements = if (moodText.isNullOrBlank()) {
             emptyList()
@@ -85,6 +81,17 @@ object AutoLayoutAlgorithm {
         trimWidthMm = paperSize.widthMm,
         trimHeightMm = paperSize.heightMm
     )
+
+    private fun chooseSingleTemplate(imageWidth: Int?, imageHeight: Int?): PageTemplate {
+        val width = imageWidth ?: return PageTemplate.SingleLandscape
+        val height = imageHeight ?: return PageTemplate.SingleLandscape
+        if (width <= 0 || height <= 0) return PageTemplate.SingleLandscape
+        return if (width.toFloat() / height.toFloat() >= 1f) {
+            PageTemplate.SingleLandscape
+        } else {
+            PageTemplate.SinglePortrait
+        }
+    }
 
     private fun buildMoodTextElements(memory: MemoryRecordEntity, paperSize: PaperSize): List<TextElement> {
         if (memory.moodText.isNullOrBlank()) return emptyList()

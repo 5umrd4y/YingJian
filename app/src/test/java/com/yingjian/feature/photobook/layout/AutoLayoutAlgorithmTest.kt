@@ -2,6 +2,7 @@ package com.yingjian.feature.photobook.layout
 
 import com.yingjian.core.data.database.MemoryRecordEntity
 import com.yingjian.core.data.database.PhotobookEntity
+import com.yingjian.feature.photobook.model.ImageRef
 import com.yingjian.feature.photobook.model.PageTemplate
 import com.yingjian.feature.photobook.model.PaperSize
 import org.junit.Assert.assertEquals
@@ -12,19 +13,37 @@ import org.junit.Test
 class AutoLayoutAlgorithmTest {
 
     @Test
-    fun `layout creates single template page per memory`() {
-        val memories = listOf(
-            testMemory(id = 1, width = 1200, height = 800),
-            testMemory(id = 2, width = 800, height = 1200)
-        )
+    fun `layout chooses landscape single for landscape memory`() {
+        val memories = listOf(testMemory(id = 1, width = 1200, height = 800))
         val photobook = PhotobookEntity(name = "Test", paperSize = "TWELVE_INCH_LANDSCAPE", createdAt = 0, updatedAt = 0)
 
         val result = AutoLayoutAlgorithm.layout(memories, PaperSize.TWELVE_INCH_LANDSCAPE, photobook)
 
-        assertEquals(2, result.pages.size)
-        assertEquals(PageTemplate.SingleLandscape, result.pages[0].template)
-        assertEquals("content://test/1", result.pages[0].slots.first().imageRef?.imageUri)
-        assertEquals(1f, result.pages[0].slots.first().cropScale, 0.001f)
+        assertEquals(PageTemplate.SingleLandscape, result.pages.single().template)
+        assertEquals(1200, result.pages.single().slots.single().imageRef?.imageWidth)
+        assertEquals(800, result.pages.single().slots.single().imageRef?.imageHeight)
+    }
+
+    @Test
+    fun `layout chooses portrait single for portrait memory`() {
+        val memories = listOf(testMemory(id = 2, width = 800, height = 1200))
+        val photobook = PhotobookEntity(name = "Test", paperSize = "TWELVE_INCH_LANDSCAPE", createdAt = 0, updatedAt = 0)
+
+        val result = AutoLayoutAlgorithm.layout(memories, PaperSize.TWELVE_INCH_LANDSCAPE, photobook)
+
+        assertEquals(PageTemplate.SinglePortrait, result.pages.single().template)
+    }
+
+    @Test
+    fun `create single photo page falls back to landscape when dimensions are unknown`() {
+        val page = AutoLayoutAlgorithm.createSinglePhotoPage(
+            imageRef = ImageRef(memoryId = 1, imageUri = "content://test/1", sourceImageIndex = 0),
+            moodText = null,
+            paperSize = PaperSize.TWELVE_INCH_LANDSCAPE,
+            pageNumber = 1
+        )
+
+        assertEquals(PageTemplate.SingleLandscape, page.template)
     }
 
     @Test

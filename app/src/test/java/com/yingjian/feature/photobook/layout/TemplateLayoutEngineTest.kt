@@ -1,41 +1,64 @@
 package com.yingjian.feature.photobook.layout
 
 import com.yingjian.feature.photobook.model.PageTemplate
+import com.yingjian.feature.photobook.model.PhotobookLayoutDefaults
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TemplateLayoutEngineTest {
-    @Test
-    fun `single template returns one centered slot inside safe area`() {
-        val slots = TemplateLayoutEngine.calculateSlots(
-            LayoutInput(
-                trimWidthMm = 285f,
-                trimHeightMm = 210f,
-                bleedMm = 3f,
-                safeMarginMm = 16f,
-                template = PageTemplate.SingleLandscape
-            )
-        )
+    private val input = LayoutInput(
+        trimWidthMm = 285f,
+        trimHeightMm = 210f,
+        bleedMm = 3f,
+        safeMarginMm = 16f,
+        bottomTextReserveMm = 20f,
+        gutterMm = 8f,
+        template = PageTemplate.SingleLandscape
+    )
 
-        assertEquals(1, slots.size)
-        assertEquals("slot-1", slots.first().slotId)
-        assertTrue(slots.first().xMm >= 16f)
-        assertTrue(slots.first().yMm >= 16f)
-        assertTrue(slots.first().xMm + slots.first().widthMm <= 285f - 16f)
-        assertTrue(slots.first().yMm + slots.first().heightMm <= 210f - 28f)
+    @Test
+    fun `single landscape is centered with 3 to 2 ratio`() {
+        val slot = TemplateLayoutEngine.calculateSlots(input).single()
+
+        val contentWidth = 285f - 16f * 2f
+        val contentHeight = 210f - 16f * 2f - 20f
+        val expectedWidth = minOf(contentWidth, contentHeight * 1.5f)
+        val expectedHeight = expectedWidth / 1.5f
+
+        assertEquals("slot-1", slot.slotId)
+        assertEquals(expectedWidth, slot.widthMm, 0.01f)
+        assertEquals(expectedHeight, slot.heightMm, 0.01f)
+        assertEquals(16f + (contentWidth - expectedWidth) / 2f, slot.xMm, 0.01f)
+        assertEquals(16f + (contentHeight - expectedHeight) / 2f, slot.yMm, 0.01f)
     }
 
     @Test
-    fun `grid four template returns four non-overlapping slots`() {
-        val slots = TemplateLayoutEngine.calculateSlots(
-            LayoutInput(285f, 210f, 3f, 16f, PageTemplate.GridFour)
-        )
+    fun `single portrait is centered with 2 to 3 ratio`() {
+        val slot = TemplateLayoutEngine.calculateSlots(input.copy(template = PageTemplate.SinglePortrait)).single()
 
-        assertEquals(listOf("slot-1", "slot-2", "slot-3", "slot-4"), slots.map { it.slotId })
-        assertTrue(slots[0].xMm < slots[1].xMm)
-        assertEquals(slots[0].yMm, slots[1].yMm, 0.001f)
-        assertEquals(slots[2].yMm, slots[3].yMm, 0.001f)
-        assertTrue(slots[2].yMm > slots[0].yMm)
+        val contentWidth = 285f - 16f * 2f
+        val contentHeight = 210f - 16f * 2f - 20f
+        val expectedHeight = minOf(contentHeight, contentWidth * 1.5f)
+        val expectedWidth = expectedHeight * (2f / 3f)
+
+        assertEquals("slot-1", slot.slotId)
+        assertEquals(expectedWidth, slot.widthMm, 0.01f)
+        assertEquals(expectedHeight, slot.heightMm, 0.01f)
+        assertEquals(16f + (contentWidth - expectedWidth) / 2f, slot.xMm, 0.01f)
+        assertEquals(16f + (contentHeight - expectedHeight) / 2f, slot.yMm, 0.01f)
+    }
+
+    @Test
+    fun `all template slots stay inside content area`() {
+        PageTemplate.entries.forEach { template ->
+            val slots = TemplateLayoutEngine.calculateSlots(input.copy(template = template))
+            slots.forEach { slot ->
+                assertTrue("${template.name} ${slot.slotId} left", slot.xMm >= PhotobookLayoutDefaults.SAFE_MARGIN_MM)
+                assertTrue("${template.name} ${slot.slotId} top", slot.yMm >= PhotobookLayoutDefaults.SAFE_MARGIN_MM)
+                assertTrue("${template.name} ${slot.slotId} right", slot.xMm + slot.widthMm <= 285f - 16f)
+                assertTrue("${template.name} ${slot.slotId} bottom", slot.yMm + slot.heightMm <= 210f - 16f - 20f)
+            }
+        }
     }
 }
