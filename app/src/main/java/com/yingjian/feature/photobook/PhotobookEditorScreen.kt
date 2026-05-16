@@ -6,7 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -35,9 +39,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -54,7 +55,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
@@ -346,39 +352,6 @@ fun PhotobookEditorScreen(
                 }
             }
 
-            // Template selector — content pages only
-            if (!isCoverLeaf && !isBackCoverLeaf && bookState.pages.isNotEmpty()) {
-                val cp = currentLeafIndex - 1
-                val currentPageState = bookState.pages.getOrNull(cp)
-                if (currentPageState != null) {
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 60.dp)
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        PageTemplate.entries.forEachIndexed { index, template ->
-                            SegmentedButton(
-                                selected = currentPageState.template == template,
-                                onClick = { onChangeTemplate(template) },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = PageTemplate.entries.size),
-                                label = {
-                                    Text(
-                                        when (template) {
-                                            PageTemplate.SingleLandscape -> "横图"
-                                            PageTemplate.SinglePortrait -> "竖图"
-                                            PageTemplate.TwoHorizontal -> "上下"
-                                            PageTemplate.TwoVertical -> "左右"
-                                            PageTemplate.GridFour -> "四宫格"
-                                        }
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
             // Leaf navigation
             Row(
                 modifier = Modifier
@@ -473,45 +446,30 @@ fun PhotobookEditorScreen(
     }
 
     if (showLayoutSheet) {
+        val currentTemplate = bookState.pages.getOrNull(currentLeafIndex - 1)?.template
         ModalBottomSheet(
             onDismissRequest = { showLayoutSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "选择版型",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                SingleChoiceSegmentedButtonRow {
-                    PageTemplate.entries.forEachIndexed { index, template ->
-                        SegmentedButton(
-                            selected = false,
-                            onClick = {
-                                onChangeTemplate(template)
-                                showLayoutSheet = false
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = PageTemplate.entries.size),
-                            label = {
-                                Text(
-                                    when (template) {
-                                        PageTemplate.SingleLandscape -> "横图"
-                                        PageTemplate.SinglePortrait -> "竖图"
-                                        PageTemplate.TwoHorizontal -> "上下"
-                                        PageTemplate.TwoVertical -> "左右"
-                                        PageTemplate.GridFour -> "四宫格"
-                                    }
-                                )
-                            }
-                        )
-                    }
+                PageTemplate.entries.forEach { template ->
+                    PageTemplateIconButton(
+                        template = template,
+                        selected = template == currentTemplate,
+                        onClick = {
+                            onChangeTemplate(template)
+                            showLayoutSheet = false
+                        }
+                    )
                 }
-                Spacer(modifier = Modifier.padding(8.dp))
             }
+            Spacer(modifier = Modifier.padding(8.dp))
         }
     }
 
@@ -612,6 +570,93 @@ fun PhotobookEditorScreen(
                     }
                 }
                 Spacer(modifier = Modifier.padding(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PageTemplateIconButton(
+    template: PageTemplate,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(14.dp)
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val backgroundColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .clip(shape)
+            .background(backgroundColor)
+            .border(1.dp, borderColor, shape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        PageTemplateIcon(template = template, selected = selected)
+    }
+}
+
+@Composable
+private fun PageTemplateIcon(template: PageTemplate, selected: Boolean) {
+    val pageColor = MaterialTheme.colorScheme.surfaceContainerLowest
+    val pageBorderColor = MaterialTheme.colorScheme.outlineVariant
+    val slotColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Canvas(modifier = Modifier.size(38.dp)) {
+        val pageWidth = size.width * 0.9f
+        val pageHeight = pageWidth * 210f / 285f
+        val pageLeft = (size.width - pageWidth) / 2f
+        val pageTop = (size.height - pageHeight) / 2f
+        val pageCorner = 2.5.dp.toPx()
+
+        drawRoundRect(
+            color = pageColor,
+            topLeft = Offset(pageLeft, pageTop),
+            size = Size(pageWidth, pageHeight),
+            cornerRadius = CornerRadius(pageCorner, pageCorner)
+        )
+        drawRoundRect(
+            color = pageBorderColor,
+            topLeft = Offset(pageLeft, pageTop),
+            size = Size(pageWidth, pageHeight),
+            cornerRadius = CornerRadius(pageCorner, pageCorner),
+            style = Stroke(width = 1.dp.toPx())
+        )
+
+        fun drawSlot(leftRatio: Float, topRatio: Float, widthRatio: Float, heightRatio: Float) {
+            drawRoundRect(
+                color = slotColor,
+                topLeft = Offset(
+                    pageLeft + pageWidth * leftRatio,
+                    pageTop + pageHeight * topRatio
+                ),
+                size = Size(pageWidth * widthRatio, pageHeight * heightRatio),
+                cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+            )
+        }
+
+        when (template) {
+            PageTemplate.SingleLandscape -> drawSlot(0.16f, 0.2f, 0.68f, 0.48f)
+            PageTemplate.SinglePortrait -> drawSlot(0.39f, 0.08f, 0.22f, 0.78f)
+            PageTemplate.TwoHorizontal -> {
+                drawSlot(0.18f, 0.12f, 0.64f, 0.32f)
+                drawSlot(0.18f, 0.56f, 0.64f, 0.32f)
+            }
+            PageTemplate.TwoVertical -> {
+                drawSlot(0.14f, 0.16f, 0.32f, 0.64f)
+                drawSlot(0.54f, 0.16f, 0.32f, 0.64f)
+            }
+            PageTemplate.GridFour -> {
+                drawSlot(0.15f, 0.14f, 0.3f, 0.3f)
+                drawSlot(0.55f, 0.14f, 0.3f, 0.3f)
+                drawSlot(0.15f, 0.56f, 0.3f, 0.3f)
+                drawSlot(0.55f, 0.56f, 0.3f, 0.3f)
             }
         }
     }

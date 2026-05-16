@@ -20,6 +20,11 @@ data class SelectedMemoryPhoto(
     val imageHeight: Int? = null
 )
 
+fun SelectedMemoryPhoto.withImageDimensions(width: Int?, height: Int?): SelectedMemoryPhoto {
+    if (width == null || height == null || width <= 0 || height <= 0) return this
+    return copy(imageWidth = width, imageHeight = height)
+}
+
 object SelectedMemoryPhotoCodec {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 

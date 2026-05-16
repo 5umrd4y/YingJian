@@ -1,5 +1,8 @@
 package com.yingjian.feature.photobook
 
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.media.ExifInterface
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -33,15 +36,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.yingjian.core.data.database.MemoryRecordEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,8 +59,19 @@ fun PhotoPickerScreen(
     onBack: () -> Unit,
     onComplete: (List<SelectedMemoryPhoto>) -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val selectedPhotos = remember { mutableStateListOf<SelectedMemoryPhoto>() }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
+    fun completeSelection(photos: List<SelectedMemoryPhoto>) {
+        coroutineScope.launch {
+            val resolvedPhotos = withContext(Dispatchers.IO) {
+                photos.map { it.withResolvedImageDimensions(context) }
+            }
+            onComplete(resolvedPhotos)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -69,7 +88,7 @@ fun PhotoPickerScreen(
                             "完成 (${selectedPhotos.size})",
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
-                                .clickable { onComplete(selectedPhotos.toList()) }
+                                .clickable { completeSelection(selectedPhotos.toList()) }
                                 .padding(horizontal = 16.dp)
                         )
                     }
@@ -108,7 +127,7 @@ fun PhotoPickerScreen(
                             onToggle = {
                                 selectedPhotos.clear()
                                 selectedPhotos.add(photo)
-                                onComplete(selectedPhotos.toList())
+                                completeSelection(selectedPhotos.toList())
                             }
                         )
                     }
@@ -169,6 +188,47 @@ fun PhotoPickerScreen(
             }
         }
     }
+}
+
+private fun SelectedMemoryPhoto.withResolvedImageDimensions(context: Context): SelectedMemoryPhoto {
+    val dimensions = resolveImageDimensions(context, imageUri) ?: return this
+    return withImageDimensions(dimensions.first, dimensions.second)
+}
+
+private fun resolveImageDimensions(context: Context, uriString: String): Pair<Int, Int>? {
+    val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+
+    runCatching {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream, null, bounds)
+        }
+    }.getOrNull()
+
+    var width = bounds.outWidth
+    var height = bounds.outHeight
+    if (width <= 0 || height <= 0) return null
+
+    val orientation = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            ExifInterface(stream).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_UNDEFINED
+            )
+        } ?: ExifInterface.ORIENTATION_UNDEFINED
+    }.getOrDefault(ExifInterface.ORIENTATION_UNDEFINED)
+
+    if (orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
+        orientation == ExifInterface.ORIENTATION_ROTATE_270 ||
+        orientation == ExifInterface.ORIENTATION_TRANSPOSE ||
+        orientation == ExifInterface.ORIENTATION_TRANSVERSE
+    ) {
+        val originalWidth = width
+        width = height
+        height = originalWidth
+    }
+
+    return width to height
 }
 
 @Composable
