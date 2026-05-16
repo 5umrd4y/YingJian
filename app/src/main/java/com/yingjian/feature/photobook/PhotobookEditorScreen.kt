@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
@@ -34,7 +33,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -55,9 +53,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.CoverLayout
+import com.yingjian.feature.photobook.model.CoverPageType
 import com.yingjian.feature.photobook.model.PageTemplate
+import com.yingjian.feature.photobook.model.PhotobookLayoutDefaults
+import com.yingjian.feature.photobook.model.TypedEditorSelection
+import com.yingjian.feature.photobook.model.moveText
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,7 +89,11 @@ fun PhotobookEditorScreen(
     pageMoodText: String? = null,
     pageMemoryDate: Long? = null,
     snackbarHostState: androidx.compose.material3.SnackbarHostState? = null,
-    isExportingPdf: Boolean = false
+    isExportingPdf: Boolean = false,
+    onTextAction: () -> Unit = {},
+    onAddPage: () -> Unit = {},
+    onUpdateCoverLayout: (CoverLayout) -> Unit = {},
+    onUpdateBackCoverLayout: (CoverLayout) -> Unit = {}
 ) {
     val leafCount = bookState.pages.size + 2
     val maxLeafIndex = (leafCount - 1).coerceAtLeast(0)
@@ -131,7 +140,6 @@ fun PhotobookEditorScreen(
                     }
                 },
                 actions = {
-                    // Set cover: only enabled on content pages with an image
                     if (!isCoverLeaf && !isBackCoverLeaf) {
                         IconButton(onClick = { showCoverSheet = true }) {
                             Icon(Icons.Default.Style, contentDescription = "设为封面")
@@ -168,78 +176,149 @@ fun PhotobookEditorScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest)
         ) {
-            // Animated leaf content
-            AnimatedContent(
-                targetState = currentLeafIndex,
-                transitionSpec = {
-                    if (targetState > initialState) {
-                        (slideInHorizontally { it } + fadeIn())
-                            .togetherWith(slideOutHorizontally { -it } + fadeOut())
-                    } else {
-                        (slideInHorizontally { -it } + fadeIn())
-                            .togetherWith(slideOutHorizontally { it } + fadeOut())
+            // Floating toolbar at top center
+            FloatingPhotobookToolbar(
+                onLayoutClicked = { /* handled by segmented button row */ },
+                onTextClicked = onTextAction,
+                onMoveClicked = { /* show move sheet */ },
+                onDeleteClicked = onDeleteSelectedSlotImage,
+                onAddPageClicked = onAddPage,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            )
+
+            // Stage centered in workspace
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                AnimatedContent(
+                    targetState = currentLeafIndex,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (slideInHorizontally { it } + fadeIn())
+                                .togetherWith(slideOutHorizontally { -it } + fadeOut())
+                        } else {
+                            (slideInHorizontally { -it } + fadeIn())
+                                .togetherWith(slideOutHorizontally { it } + fadeOut())
+                        }
                     }
-                },
-                modifier = Modifier.weight(1f)
-            ) { leafIndex ->
-                when {
-                    leafIndex == 0 -> {
-                        // Cover page
-                        CoverEditorPage(
-                            photobook = bookState.photobook,
-                            onUpdatePhotobook = onUpdatePhotobook,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp)
-                        )
-                    }
-                    leafIndex == leafCount - 1 -> {
-                        // Back cover page
-                        BackCoverEditorPage(
-                            photobook = bookState.photobook,
-                            onUpdatePhotobook = onUpdatePhotobook,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp)
-                        )
-                    }
-                    else -> {
-                        // Content page
-                        val cp = leafIndex - 1
-                        if (cp in bookState.pages.indices) {
-                            val currentPageState = bookState.pages[cp]
-                            PhotobookCanvasPage(
-                                pageState = currentPageState,
-                                containerWidthDp = 300.dp,
-                                moodText = pageMoodText,
-                                memoryDate = pageMemoryDate,
-                                selectedSlotId = bookState.selectedSlotId,
-                                onSlotSelected = { slotId ->
-                                    val updatedPages = bookState.pages.toMutableList()
-                                    updatedPages[cp] = currentPageState
-                                    onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId, currentPage = cp))
+                ) { leafIndex ->
+                    when {
+                        leafIndex == 0 -> {
+                            CoverPageRenderer(
+                                layout = bookState.coverLayout,
+                                scaleFactor = 1f,
+                                selectedTextId = (bookState.selection as? TypedEditorSelection.CoverText)
+                                    ?.takeIf { it.pageType == CoverPageType.Cover }
+                                    ?.textId,
+                                onTextSelected = { textId ->
+                                    onUpdateState(bookState.copy(selection = TypedEditorSelection.CoverText(CoverPageType.Cover, textId)))
                                 },
-                                onSlotImageAdjusted = { slotId, offsetXMm, offsetYMm, scale ->
-                                    val updatedPages = bookState.pages.toMutableList()
-                                    updatedPages[cp] = currentPageState.copy(
-                                        slots = currentPageState.slots.map { slot ->
-                                            if (slot.slotId == slotId) {
-                                                slot.copy(cropOffsetX = offsetXMm, cropOffsetY = offsetYMm, cropScale = scale)
-                                            } else {
-                                                slot
-                                            }
+                                onTextMoved = { textId, xMm, yMm ->
+                                    onUpdateCoverLayout(bookState.coverLayout.moveText(textId, xMm, yMm))
+                                }
+                            )
+                        }
+                        leafIndex == leafCount - 1 -> {
+                            CoverPageRenderer(
+                                layout = bookState.backCoverLayout,
+                                scaleFactor = 1f,
+                                selectedTextId = (bookState.selection as? TypedEditorSelection.CoverText)
+                                    ?.takeIf { it.pageType == CoverPageType.BackCover }
+                                    ?.textId,
+                                onTextSelected = { textId ->
+                                    onUpdateState(bookState.copy(selection = TypedEditorSelection.CoverText(CoverPageType.BackCover, textId)))
+                                },
+                                onTextMoved = { textId, xMm, yMm ->
+                                    onUpdateBackCoverLayout(bookState.backCoverLayout.moveText(textId, xMm, yMm))
+                                }
+                            )
+                        }
+                        else -> {
+                            val cp = leafIndex - 1
+                            if (cp in bookState.pages.indices) {
+                                val currentPageState = bookState.pages[cp]
+                                PhotobookStage(
+                                    modifier = Modifier,
+                                    maxWidth = 300.dp,
+                                    backgroundColor = Color(PhotobookLayoutDefaults.CONTENT_PAGE_COLOR)
+                                ) { scaleFactor ->
+                                    ContentPageRenderer(
+                                        pageState = currentPageState,
+                                        scaleFactor = scaleFactor,
+                                        selectedSlotId = bookState.selectedSlotId,
+                                        onSlotSelected = { slotId ->
+                                            val updatedPages = bookState.pages.toMutableList()
+                                            updatedPages[cp] = currentPageState
+                                            onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId, currentPage = cp))
+                                        },
+                                        onEmptySlotAddClicked = { slotId ->
+                                            val updatedPages = bookState.pages.toMutableList()
+                                            updatedPages[cp] = currentPageState
+                                            onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId, currentPage = cp))
+                                            onFillSelectedSlot()
+                                        },
+                                        onSlotImageAdjusted = { slotId, offsetXMm, offsetYMm, scale ->
+                                            val updatedPages = bookState.pages.toMutableList()
+                                            updatedPages[cp] = currentPageState.copy(
+                                                slots = currentPageState.slots.map { slot ->
+                                                    if (slot.slotId == slotId) {
+                                                        slot.copy(cropOffsetX = offsetXMm, cropOffsetY = offsetYMm, cropScale = scale)
+                                                    } else {
+                                                        slot
+                                                    }
+                                                }
+                                            )
+                                            onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId))
+                                        },
+                                        moodText = pageMoodText,
+                                        memoryDate = pageMemoryDate
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Template selector — content pages only
+            if (!isCoverLeaf && !isBackCoverLeaf && bookState.pages.isNotEmpty()) {
+                val cp = currentLeafIndex - 1
+                val currentPageState = bookState.pages.getOrNull(cp)
+                if (currentPageState != null) {
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 60.dp)
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        PageTemplate.entries.forEachIndexed { index, template ->
+                            SegmentedButton(
+                                selected = currentPageState.template == template,
+                                onClick = { onChangeTemplate(template) },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = PageTemplate.entries.size),
+                                label = {
+                                    Text(
+                                        when (template) {
+                                            PageTemplate.SingleLandscape -> "横图"
+                                            PageTemplate.SinglePortrait -> "竖图"
+                                            PageTemplate.TwoHorizontal -> "上下"
+                                            PageTemplate.TwoVertical -> "左右"
+                                            PageTemplate.GridFour -> "四宫格"
                                         }
                                     )
-                                    onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId))
-                                },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(16.dp)
+                                }
                             )
                         }
                     }
@@ -249,6 +328,7 @@ fun PhotobookEditorScreen(
             // Leaf navigation
             Row(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.Center,
@@ -261,7 +341,6 @@ fun PhotobookEditorScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一页")
                 }
 
-                // Leaf indicator dots
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -297,62 +376,9 @@ fun PhotobookEditorScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一页")
                 }
             }
-
-            // Bottom toolbar — content pages only
-            if (!isCoverLeaf && !isBackCoverLeaf && bookState.pages.isNotEmpty()) {
-                val cp = currentLeafIndex - 1
-                val currentPageState = bookState.pages.getOrNull(cp)
-
-                // Template selector
-                if (currentPageState != null) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        PageTemplate.entries.forEachIndexed { index, template ->
-                            SegmentedButton(
-                                selected = currentPageState.template == template,
-                                onClick = { onChangeTemplate(template) },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = PageTemplate.entries.size),
-                                label = {
-                                    Text(
-                                        when (template) {
-                                            PageTemplate.SingleLandscape -> "横图"
-                                            PageTemplate.SinglePortrait -> "竖图"
-                                            PageTemplate.TwoHorizontal -> "上下"
-                                            PageTemplate.TwoVertical -> "左右"
-                                            PageTemplate.GridFour -> "四宫格"
-                                        }
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Slot command row or add photos button
-                if (bookState.selectedSlotId != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        TextButton(onClick = onFillSelectedSlot) { Text("换图") }
-                        TextButton(onClick = onMoveSelectedToPreviousPage) { Text("上一页") }
-                        TextButton(onClick = onMoveSelectedToNextPage) { Text("下一页") }
-                        TextButton(onClick = onMoveSelectedToNewPage) { Text("新页") }
-                        TextButton(onClick = onDeleteSelectedSlotImage) { Text("删除") }
-                        TextButton(onClick = onResetSelectedSlotImage) { Text("重置") }
-                    }
-                } else {
-                    // Existing "添加照片" button
-                    FilledTonalButton(onClick = onAddPhotos) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("添加照片")
-                    }
-                }
-            }
         }
     }
 
-    // Cover photo bottom sheet
     if (showCoverSheet) {
         ModalBottomSheet(
             onDismissRequest = { showCoverSheet = false },

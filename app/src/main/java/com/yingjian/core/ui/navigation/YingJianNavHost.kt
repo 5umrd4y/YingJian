@@ -38,10 +38,13 @@ import com.yingjian.feature.photobook.MemoryPhotoPickerMode
 import com.yingjian.feature.photobook.export.PdfExportUtil
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.CoverLayout
+import com.yingjian.feature.photobook.model.CoverPageType
 import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PageTemplate
 import com.yingjian.feature.photobook.model.PaperSize
+import com.yingjian.feature.photobook.model.TypedEditorSelection
 import com.yingjian.feature.settings.SettingsScreen
 import com.yingjian.feature.settings.AboutScreen
 import com.yingjian.core.data.database.MemoryRecordEntity
@@ -722,6 +725,28 @@ fun YingJianNavHost(
                         val updatedPages = state.pages.toMutableList()
                         updatedPages[cp] = PhotobookSlotActions.swapSlots(page, srcSlotId, targetSlotId)
                         loadedBookState = state.copy(pages = updatedPages, selectedSlotId = null)
+                    },
+                    onTextAction = {
+                        // For now, no-op — text editing UI will be added in a follow-up task
+                    },
+                    onAddPage = {
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val newPage = PhotobookSlotActions.emptyPage(
+                            pageNumber = state.pages.size + 1,
+                            template = PageTemplate.SingleLandscape
+                        )
+                        val updatedPages = PhotobookSlotActions.insertPageAfter(
+                            state.pages,
+                            currentPageIndex = state.currentPage,
+                            newPage = newPage
+                        )
+                        loadedBookState = state.copy(pages = updatedPages, currentPage = state.currentPage + 1, selectedSlotId = "slot-1")
+                    },
+                    onUpdateCoverLayout = { newCoverLayout ->
+                        loadedBookState = loadedBookState?.copy(coverLayout = newCoverLayout)
+                    },
+                    onUpdateBackCoverLayout = { newBackCoverLayout ->
+                        loadedBookState = loadedBookState?.copy(backCoverLayout = newBackCoverLayout)
                     },
                     snackbarHostState = editorSnackbarHostState,
                     isExportingPdf = isExportingPdf,
