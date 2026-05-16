@@ -12,19 +12,18 @@ import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.text.StaticLayout
 import android.text.TextPaint
-import com.yingjian.feature.photobook.displayBackDateText
-import com.yingjian.feature.photobook.displayBackSubtitle
-import com.yingjian.feature.photobook.displayBackTitle
-import com.yingjian.feature.photobook.displayCoverSubtitle
-import com.yingjian.feature.photobook.displayCoverTitle
 import com.yingjian.feature.photobook.layout.LayoutInput
 import com.yingjian.feature.photobook.layout.SlotRectMm
 import com.yingjian.feature.photobook.layout.TemplateLayoutEngine
 import com.yingjian.feature.photobook.model.BookState
+import com.yingjian.feature.photobook.model.CoverLayout
 import com.yingjian.feature.photobook.model.ImageSlot
 import com.yingjian.feature.photobook.model.PageState
 import com.yingjian.feature.photobook.model.PaperSize
+import com.yingjian.feature.photobook.model.PhotobookLayoutDefaults
 import com.yingjian.feature.photobook.model.TextElement
+import com.yingjian.feature.photobook.model.toPaintAlign
+import com.yingjian.feature.photobook.model.toStaticLayoutAlignment
 import java.io.ByteArrayOutputStream
 
 /**
@@ -47,6 +46,10 @@ object PdfExportUtil {
     private const val PDF_TEXT_COLOR = 0xFF4c463e.toInt()
     private const val PDF_GRAY_TEXT_COLOR = 0xFF9E9E9E.toInt()
 
+    private fun backgroundColorInt(hex: String): Int = runCatching {
+        android.graphics.Color.parseColor(hex)
+    }.getOrDefault(0xFFFAF9F6.toInt())
+
     fun exportPdf(context: Context, bookState: BookState): ByteArray {
         val document = PdfDocument()
 
@@ -67,8 +70,8 @@ object PdfExportUtil {
         // 1. Cover page
         val coverPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, 1).create()
         val coverPage = document.startPage(coverPageInfo)
-        coverPage.canvas.drawColor(0xFFFAF9F6.toInt())
-        renderCoverPage(context, coverPage.canvas, bookState, paperSize, typeface)
+        coverPage.canvas.drawColor(backgroundColorInt(bookState.coverLayout.backgroundColor))
+        renderCoverLayout(coverPage.canvas, bookState.coverLayout, typeface)
         drawCropMarks(coverPage.canvas, pageWidthPx, pageHeightPx)
         document.finishPage(coverPage)
 
@@ -86,7 +89,9 @@ object PdfExportUtil {
                     trimWidthMm = pageState.trimWidthMm,
                     trimHeightMm = pageState.trimHeightMm,
                     bleedMm = pageState.bleedMm,
-                    safeMarginMm = 16f,
+                    safeMarginMm = PhotobookLayoutDefaults.SAFE_MARGIN_MM,
+                    bottomTextReserveMm = PhotobookLayoutDefaults.BOTTOM_TEXT_RESERVE_MM,
+                    gutterMm = PhotobookLayoutDefaults.GUTTER_MM,
                     template = pageState.template
                 )
             )
@@ -110,8 +115,8 @@ object PdfExportUtil {
         val backPageNum = bookState.pages.size + 2
         val backPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, backPageNum).create()
         val backPage = document.startPage(backPageInfo)
-        backPage.canvas.drawColor(0xFFFAF9F6.toInt())
-        renderBackPage(backPage.canvas, bookState, paperSize, typeface)
+        backPage.canvas.drawColor(backgroundColorInt(bookState.backCoverLayout.backgroundColor))
+        renderCoverLayout(backPage.canvas, bookState.backCoverLayout, typeface)
         drawCropMarks(backPage.canvas, pageWidthPx, pageHeightPx)
         document.finishPage(backPage)
 
@@ -124,95 +129,40 @@ object PdfExportUtil {
     private fun mmToPx(mm: Float): Int = (mm * DPI / 25.4f).toInt()
     private fun mmToPxFloat(mm: Float): Float = mm * DPI / 25.4f
 
-    private fun renderCoverPage(
-        context: Context,
-        canvas: Canvas,
-        bookState: BookState,
-        paperSize: PaperSize,
-        typeface: Typeface
-    ) {
-        val photobook = bookState.photobook
+    private fun renderCoverLayout(canvas: Canvas, layout: CoverLayout, typeface: Typeface) {
+        layout.textElements.forEach { element ->
+            if (element.role == com.yingjian.feature.photobook.model.CoverTextRole.Divider) {
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = PDF_TEXT_COLOR
+                    strokeWidth = mmToPxFloat(0.5f)
+                }
+                val x = mmToPxFloat(element.xMm)
+                val y = mmToPxFloat(element.yMm + element.heightMm / 2f)
+                val w = mmToPxFloat(element.widthMm)
+                canvas.drawLine(x, y, x + w, y, paint)
+            } else {
+                val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                    this.typeface = typeface
+                    textSize = mmToPxFloat(element.fontSizeMm)
+                    color = PDF_TEXT_COLOR
+                    textAlign = element.textAlign.toPaintAlign()
+                }
+                val textWidthPx = mmToPxFloat(element.widthMm).toInt()
+                val textLeft = mmToPxFloat(element.xMm)
+                val textTop = mmToPxFloat(element.yMm)
 
-        // Cover title
-        val titleText = photobook.displayCoverTitle()
-        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.typeface = typeface
-            textSize = mmToPxFloat(10f)
-            color = PDF_TEXT_COLOR
-            textAlign = Paint.Align.CENTER
-        }
-        val titleY = mmToPxFloat(paperSize.heightMm * 0.45f)
-        val centerX = mmToPxFloat(paperSize.widthMm / 2)
+                val staticLayout = StaticLayout.Builder
+                    .obtain(element.text, 0, element.text.length, paint, textWidthPx)
+                    .setAlignment(element.textAlign.toStaticLayoutAlignment())
+                    .setLineSpacing(0f, 1.2f)
+                    .setIncludePad(false)
+                    .build()
 
-        val titleWidth = mmToPxFloat(paperSize.widthMm * 0.7f).toInt()
-        val titleLeft = (mmToPxFloat(paperSize.widthMm) - titleWidth) / 2f
-        val titleLayout = StaticLayout.Builder
-            .obtain(titleText, 0, titleText.length, titlePaint, titleWidth)
-            .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
-            .setLineSpacing(0f, 1.3f)
-            .setIncludePad(false)
-            .build()
-
-        canvas.save()
-        canvas.translate(titleLeft, titleY)
-        titleLayout.draw(canvas)
-        canvas.restore()
-
-        // Cover subtitle
-        val subtitleText = photobook.displayCoverSubtitle()
-        val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.typeface = typeface
-            textSize = mmToPxFloat(7f)
-            color = PDF_TEXT_COLOR
-            textAlign = Paint.Align.CENTER
-        }
-        val subtitleY = titleY + titleLayout.height + mmToPxFloat(5f)
-
-        canvas.drawText(subtitleText, centerX, subtitleY, subtitlePaint)
-    }
-
-    private fun renderBackPage(
-        canvas: Canvas,
-        bookState: BookState,
-        paperSize: PaperSize,
-        typeface: Typeface
-    ) {
-        val photobook = bookState.photobook
-        val centerX = mmToPxFloat(paperSize.widthMm / 2)
-        var y = mmToPxFloat(paperSize.heightMm * 0.4f)
-
-        // Back title
-        val titleText = photobook.displayBackTitle()
-        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.typeface = typeface
-            textSize = mmToPxFloat(9f)
-            color = PDF_TEXT_COLOR
-            textAlign = Paint.Align.CENTER
-        }
-        canvas.drawText(titleText, centerX, y, titlePaint)
-        y += mmToPxFloat(12f)
-
-        // Back subtitle
-        val subtitleText = photobook.displayBackSubtitle()
-        val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.typeface = typeface
-            textSize = mmToPxFloat(7f)
-            color = PDF_TEXT_COLOR
-            textAlign = Paint.Align.CENTER
-        }
-        canvas.drawText(subtitleText, centerX, y, subtitlePaint)
-
-        // Back date text (optional)
-        val dateText = photobook.displayBackDateText()
-        if (dateText.isNotBlank()) {
-            y += mmToPxFloat(10f)
-            val datePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.typeface = typeface
-                textSize = mmToPxFloat(6f)
-                color = PDF_GRAY_TEXT_COLOR
-                textAlign = Paint.Align.CENTER
+                canvas.save()
+                canvas.translate(textLeft, textTop)
+                staticLayout.draw(canvas)
+                canvas.restore()
             }
-            canvas.drawText(dateText, centerX, y, datePaint)
         }
     }
 

@@ -3,17 +3,13 @@ package com.yingjian.feature.photobook
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -26,13 +22,14 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,20 +38,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.yingjian.core.data.database.PhotobookEntity
 import com.yingjian.feature.photobook.model.BookState
+import androidx.compose.ui.unit.Dp
+import com.yingjian.feature.photobook.model.CoverLayout
 import com.yingjian.feature.photobook.model.PageState
+import com.yingjian.feature.photobook.model.PhotobookLayoutDefaults
 import kotlinx.coroutines.launch
 
 sealed interface PhotobookLeaf {
-    data class Cover(val photobook: PhotobookEntity) : PhotobookLeaf
+    data class Cover(val layout: CoverLayout) : PhotobookLeaf
     data class Content(val page: PageState) : PhotobookLeaf
-    data class BackCover(val photobook: PhotobookEntity) : PhotobookLeaf
+    data class BackCover(val layout: CoverLayout) : PhotobookLeaf
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,11 +61,11 @@ fun PhotobookPreviewScreen(
 ) {
     val leaves = remember(bookState.photobook.id, bookState.pages.size) {
         buildList {
-            add(PhotobookLeaf.Cover(bookState.photobook))
+            add(PhotobookLeaf.Cover(bookState.coverLayout))
             bookState.pages.forEach { page ->
                 add(PhotobookLeaf.Content(page))
             }
-            add(PhotobookLeaf.BackCover(bookState.photobook))
+            add(PhotobookLeaf.BackCover(bookState.backCoverLayout))
         }
     }
 
@@ -136,7 +131,7 @@ private fun PortraitSinglePageView(leaves: List<PhotobookLeaf>) {
                     leaf = leaves[page],
                     containerWidthDp = 200.dp,
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
+                        .fillMaxSize(0.85f)
                         .shadow(4.dp, RoundedCornerShape(2.dp))
                         .clip(RoundedCornerShape(2.dp))
                 )
@@ -169,10 +164,7 @@ private fun PortraitSinglePageView(leaves: List<PhotobookLeaf>) {
                     }
                     Box(
                         modifier = Modifier
-                            .size(
-                                width = if (index == pagerState.currentPage) 16.dp else 6.dp,
-                                height = 6.dp
-                            )
+                            .width(if (index == pagerState.currentPage) 16.dp else 6.dp)
                             .background(
                                 if (index == pagerState.currentPage) Color.White
                                 else when (dotType) {
@@ -303,10 +295,7 @@ private fun LandscapeSpreadView(leaves: List<PhotobookLeaf>) {
                 repeat(spreadCount) { index ->
                     Box(
                         modifier = Modifier
-                            .size(
-                                width = if (index == pagerState.currentPage) 16.dp else 6.dp,
-                                height = 6.dp
-                            )
+                            .width(if (index == pagerState.currentPage) 16.dp else 6.dp)
                             .background(
                                 if (index == pagerState.currentPage) Color.White
                                 else Color.White.copy(alpha = 0.3f),
@@ -335,139 +324,41 @@ private fun PreviewLeaf(
     containerWidthDp: Dp,
     modifier: Modifier = Modifier
 ) {
+    // Compute scaleFactor based on the standard 285x210 page size
+    val containerWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+        containerWidthDp.roundToPx()
+    }
+    val pageWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+        PhotobookLayoutDefaults.PAGE_WIDTH_MM.dp.roundToPx()
+    }
+    val scaleFactor = containerWidthPx.toFloat() / pageWidthPx.toFloat()
+
     when (leaf) {
-        is PhotobookLeaf.Cover -> CoverPreviewPage(
-            photobook = leaf.photobook,
-            containerWidthDp = containerWidthDp,
+        is PhotobookLeaf.Cover -> CoverPageRenderer(
+            layout = leaf.layout,
+            scaleFactor = scaleFactor,
+            selectedTextId = null,
+            onTextSelected = { },
+            onTextMoved = { _, _, _ -> },
             modifier = modifier
         )
-        is PhotobookLeaf.Content -> PhotobookCanvasPage(
+        is PhotobookLeaf.Content -> ContentPageRenderer(
             pageState = leaf.page,
-            containerWidthDp = containerWidthDp,
+            scaleFactor = scaleFactor,
             selectedSlotId = null,
+            onSlotSelected = { },
+            onEmptySlotAddClicked = { },
+            onSlotImageAdjusted = { _, _, _, _ -> },
             modifier = modifier
         )
-        is PhotobookLeaf.BackCover -> BackCoverPreviewPage(
-            photobook = leaf.photobook,
-            containerWidthDp = containerWidthDp,
+        is PhotobookLeaf.BackCover -> CoverPageRenderer(
+            layout = leaf.layout,
+            scaleFactor = scaleFactor,
+            selectedTextId = null,
+            onTextSelected = { },
+            onTextMoved = { _, _, _ -> },
             modifier = modifier
         )
-    }
-}
-
-@Composable
-private fun CoverPreviewPage(
-    photobook: PhotobookEntity,
-    containerWidthDp: Dp,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .aspectRatio(285f / 210f)
-            .shadow(4.dp, RoundedCornerShape(4.dp))
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color(0xFFFAF9F6)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            photobook.coverImageUri?.let { uri ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(285f / 160f)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(com.yingjian.core.ui.theme.PaperTexture.copy(alpha = 0.3f))
-                ) {
-                    coil3.compose.AsyncImage(
-                        model = android.net.Uri.parse(uri),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            Text(
-                text = photobook.displayCoverTitle(),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Light,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = photobook.displayCoverSubtitle(),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraLight,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
-
-@Composable
-private fun BackCoverPreviewPage(
-    photobook: PhotobookEntity,
-    containerWidthDp: Dp,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .aspectRatio(285f / 210f)
-            .shadow(4.dp, RoundedCornerShape(4.dp))
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color(0xFFFAF9F6)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = photobook.displayBackTitle(),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Light,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = photobook.displayBackSubtitle(),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraLight,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            if (photobook.displayBackDateText().isNotBlank()) {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = photobook.displayBackDateText(),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraLight,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
     }
 }
 
