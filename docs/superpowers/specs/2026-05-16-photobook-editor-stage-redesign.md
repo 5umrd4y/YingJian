@@ -102,7 +102,7 @@ data class SelectedMemoryPhoto(
     val memoryId: Long,
     val imageUri: String,
     val sourceImageIndex: Int,
-    val sourceImageId: String? = null,
+    val sourceImageId: Long? = null,
     val imageWidth: Int? = null,
     val imageHeight: Int? = null
 )
@@ -113,6 +113,20 @@ Rules:
 - The photo picker should populate `imageWidth` and `imageHeight` when available from metadata.
 - If dimensions are not available in the picker, resolve them before calling the page factory.
 - If metadata resolution fails, fall back to `SingleLandscape`.
+- Keep `sourceImageId` as `Long?` to match the current `SelectedMemoryPhoto` and `ImageRef` model.
+
+Also extend `ImageRef` with optional image dimensions if the dimensions need to travel with saved page data:
+
+```kotlin
+data class ImageRef(
+    val uri: String,
+    val memoryId: Long,
+    val sourceImageIndex: Int = 0,
+    val sourceImageId: Long? = null,
+    val imageWidth: Int? = null,
+    val imageHeight: Int? = null
+)
+```
 
 ## Auto Import Rules
 
@@ -147,6 +161,13 @@ Alternative acceptable implementation:
 - Add a new wrapper/factory that accepts `SelectedMemoryPhoto`, determines the template, and then constructs `PageState`.
 
 Do not make `AutoLayoutAlgorithm` calculate slot rectangles. Its role is page creation and template choice. `TemplateLayoutEngine` remains the only source of slot geometry.
+
+`AutoLayoutAlgorithm.layout(records: List<MemoryRecordEntity>, ...)` still exists in the current code. Before changing it:
+
+- Search all call sites.
+- If no current feature path uses it, mark it deprecated or remove it with tests updated.
+- If any feature path still uses it, update it to produce `SingleLandscape`/`SinglePortrait` pages with the same metadata rules.
+- Do not leave a batch import path that still creates legacy `PageTemplate.Single`.
 
 ## Content Slot Model
 
@@ -490,6 +511,16 @@ data class CoverTextElement(
 )
 ```
 
+Alignment mapping:
+
+| `PhotobookTextAlign` | Compose | `Paint.Align` | `StaticLayout` alignment |
+|---|---|---|---|
+| `Start` | `TextAlign.Start` | `Paint.Align.LEFT` | `Layout.Alignment.ALIGN_NORMAL` |
+| `Center` | `TextAlign.Center` | `Paint.Align.CENTER` | `Layout.Alignment.ALIGN_CENTER` |
+| `End` | `TextAlign.End` | `Paint.Align.RIGHT` | `Layout.Alignment.ALIGN_OPPOSITE` |
+
+The app currently serializes some content text with Compose `TextAlign`. New cover/back-cover layout JSON must use `PhotobookTextAlign`; legacy content text migration can remain separate.
+
 Persistence:
 
 - Add `coverLayoutJson` and `backCoverLayoutJson` to `PhotobookEntity`.
@@ -596,22 +627,26 @@ sealed interface EditorSelection {
 }
 ```
 
-`BookState` should use the typed selection:
+`BookState` should use typed selection. This is a change list, not a full replacement of the current model:
 
 ```kotlin
 data class BookState(
+    val photobook: PhotobookEntity,
     val pages: List<PageState>,
     val currentPage: Int,
     val selection: EditorSelection = EditorSelection.None,
     val coverLayout: CoverLayout,
     val backCoverLayout: CoverLayout,
+    val mode: LayoutMode,
+    val previousManualState: BookState? = null,
     val hasUnsavedChanges: Boolean = false
 )
 ```
 
 Notes:
 
-- Do not rely only on `selectedSlotId`; it is insufficient for slot filling and cross-page actions.
+- Preserve existing fields that are still used by current behavior, including `photobook`, `mode`, and `previousManualState`.
+- Replace `selectedSlotId: String?` with `selection: EditorSelection`; do not keep two competing selection sources.
 - `currentPage` is content-page index only.
 - Route/UI layer may maintain `currentLeafIndex` to include cover and back cover.
 - `PendingSlotFill` may be route-level state, but must be explicit and navigation-safe.
@@ -651,6 +686,7 @@ Add or update unit tests for:
 - `TemplateLayoutEngine` centers `SinglePortrait`.
 - `TemplateLayoutEngine` keeps every slot inside safe area.
 - `ImageSlot` persistence does not depend on rectangle fields.
+- `AutoLayoutAlgorithm.layout()` has no path that creates legacy `PageTemplate.Single`.
 - Empty slot fill updates the exact `(pageIndex, slotId)`.
 - Add-page inserts a `SingleLandscape` empty page.
 - Add-page renumbers subsequent content pages.
