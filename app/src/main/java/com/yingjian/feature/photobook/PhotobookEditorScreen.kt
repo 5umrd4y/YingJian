@@ -314,7 +314,8 @@ fun PhotobookEditorScreen(
                                 label = {
                                     Text(
                                         when (template) {
-                                            PageTemplate.Single -> "单图"
+                                            PageTemplate.SingleLandscape -> "横图"
+                                            PageTemplate.SinglePortrait -> "竖图"
                                             PageTemplate.TwoHorizontal -> "上下"
                                             PageTemplate.TwoVertical -> "左右"
                                             PageTemplate.GridFour -> "四宫格"

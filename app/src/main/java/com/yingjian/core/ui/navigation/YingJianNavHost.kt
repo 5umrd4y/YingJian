@@ -695,7 +695,7 @@ fun YingJianNavHost(
                         )
                         val newPage = PageState(
                             pageNumber = state.pages.size + 1,
-                            template = PageTemplate.Single,
+                            template = PageTemplate.SingleLandscape,
                             slots = listOf(selected.copy(slotId = "slot-1")),
                             trimWidthMm = page.trimWidthMm,
                             trimHeightMm = page.trimHeightMm,

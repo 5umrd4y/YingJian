@@ -11,7 +11,7 @@ import org.junit.Test
 class PhotobookSlotActionsTest {
     @Test
     fun `single to grid keeps image in first slot`() {
-        val page = page(PageTemplate.Single, listOf(slot("slot-1", 1)))
+        val page = page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 1)))
 
         val result = PhotobookSlotActions.changeTemplate(page, PageTemplate.GridFour)
 
@@ -24,7 +24,7 @@ class PhotobookSlotActionsTest {
 
     @Test
     fun `move fills first empty target slot and clears source`() {
-        val source = page(PageTemplate.Single, listOf(slot("slot-1", 1)))
+        val source = page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 1)))
         val target = page(PageTemplate.GridFour, listOf(slot("slot-1", 2), empty("slot-2"), empty("slot-3"), empty("slot-4")), pageNumber = 2)
 
         val result = PhotobookSlotActions.moveImage(source, "slot-1", target)
@@ -36,7 +36,7 @@ class PhotobookSlotActionsTest {
 
     @Test
     fun `move to full page returns target full`() {
-        val source = page(PageTemplate.Single, listOf(slot("slot-1", 1)))
+        val source = page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 1)))
         val target = page(PageTemplate.TwoVertical, listOf(slot("slot-1", 2), slot("slot-2", 3)), pageNumber = 2)
 
         val result = PhotobookSlotActions.moveImage(source, "slot-1", target)

@@ -38,7 +38,9 @@ private data class ImageRefDto(
     val memoryId: Long,
     val imageUri: String,
     val sourceImageIndex: Int?,
-    val sourceImageId: Long? = null
+    val sourceImageId: Long? = null,
+    val imageWidth: Int? = null,
+    val imageHeight: Int? = null
 )
 
 object PageLayoutDocumentSerializer {
@@ -65,17 +67,15 @@ object PageLayoutDocumentSerializer {
                 memoryId = it.memoryId,
                 imageUri = it.imageUri,
                 sourceImageIndex = it.sourceImageIndex,
-                sourceImageId = it.sourceImageId
+                sourceImageId = it.sourceImageId,
+                imageWidth = it.imageWidth,
+                imageHeight = it.imageHeight
             )
         },
         cropScale = cropScale,
         cropOffsetX = cropOffsetX,
         cropOffsetY = cropOffsetY,
-        fitMode = fitMode.name,
-        widthMm = widthMm,
-        heightMm = heightMm,
-        xMm = xMm,
-        yMm = yMm
+        fitMode = fitMode.name
     )
 
     private fun PageLayoutDocumentDto.toDomain(): PageLayoutDocument = PageLayoutDocument(
@@ -92,17 +92,15 @@ object PageLayoutDocumentSerializer {
                 memoryId = it.memoryId,
                 imageUri = it.imageUri,
                 sourceImageIndex = it.sourceImageIndex,
-                sourceImageId = it.sourceImageId
+                sourceImageId = it.sourceImageId,
+                imageWidth = it.imageWidth,
+                imageHeight = it.imageHeight
             )
         },
         cropScale = cropScale,
         cropOffsetX = cropOffsetX,
         cropOffsetY = cropOffsetY,
-        fitMode = FitMode.valueOf(fitMode),
-        widthMm = widthMm,
-        heightMm = heightMm,
-        xMm = xMm,
-        yMm = yMm
+        fitMode = FitMode.valueOf(fitMode)
     )
 
     private fun TextElement.toDto(): TextElementDto = TextElementDto(

@@ -14,7 +14,7 @@ class TemplateLayoutEngineTest {
                 trimHeightMm = 210f,
                 bleedMm = 3f,
                 safeMarginMm = 16f,
-                template = PageTemplate.Single
+                template = PageTemplate.SingleLandscape
             )
         )
 

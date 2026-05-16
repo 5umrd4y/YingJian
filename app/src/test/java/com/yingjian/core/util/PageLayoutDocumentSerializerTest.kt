@@ -39,4 +39,14 @@ class PageLayoutDocumentSerializerTest {
         assertEquals(-2.5f, decoded.slots.first().cropOffsetX, 0.001f)
         assertEquals(4.25f, decoded.slots.first().cropOffsetY, 0.001f)
     }
+
+    @Test
+    fun `page layout document defaults to version 2`() {
+        val document = PageLayoutDocument(
+            template = PageTemplate.SingleLandscape,
+            slots = listOf(ImageSlot(slotId = "slot-1", imageRef = null))
+        )
+
+        assertEquals(2, document.version)
+    }
 }

@@ -31,7 +31,8 @@ object TemplateLayoutEngine {
         val height = bottom - top
 
         return when (input.template) {
-            PageTemplate.Single -> listOf(
+            PageTemplate.SingleLandscape,
+            PageTemplate.SinglePortrait -> listOf(
                 SlotRectMm("slot-1", left, top, width, height)
             )
             PageTemplate.TwoHorizontal -> {

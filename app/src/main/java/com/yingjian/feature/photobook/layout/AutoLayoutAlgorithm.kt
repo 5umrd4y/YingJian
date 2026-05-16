@@ -32,7 +32,7 @@ object AutoLayoutAlgorithm {
         val pages = memories.mapIndexed { index, memory ->
             val page = PageState(
                 pageNumber = index + 1,
-                template = PageTemplate.Single,
+                template = PageTemplate.SingleLandscape,
                 slots = listOf(
                     ImageSlot(
                         slotId = "slot-1",
@@ -65,7 +65,7 @@ object AutoLayoutAlgorithm {
         pageNumber: Int
     ): PageState = PageState(
         pageNumber = pageNumber,
-        template = PageTemplate.Single,
+        template = PageTemplate.SingleLandscape,
         slots = listOf(ImageSlot(slotId = "slot-1", imageRef = imageRef)),
         textElements = if (moodText.isNullOrBlank()) {
             emptyList()

@@ -25,18 +25,17 @@ data class PageState(
     val elements: List<PageElement>
         get() {
             val result = mutableListOf<PageElement>()
-            val slotWidthMm = trimWidthMm / template.capacity.toFloat()
-            slots.forEachIndexed { index, slot ->
+            slots.forEach { slot ->
                 val ref = slot.imageRef
                 if (ref != null) {
                     result.add(
                         ImageElement(
                             memoryId = ref.memoryId,
                             imageUri = ref.imageUri,
-                            xMm = slot.xMm.takeIf { it != 0f } ?: (slotWidthMm * index),
-                            yMm = slot.yMm,
-                            widthMm = slot.widthMm ?: slotWidthMm,
-                            heightMm = slot.heightMm ?: trimHeightMm,
+                            xMm = 0f,
+                            yMm = 0f,
+                            widthMm = trimWidthMm,
+                            heightMm = trimHeightMm,
                             rotationDeg = 0f,
                             zIndex = 0,
                             contentScale = slot.cropScale,

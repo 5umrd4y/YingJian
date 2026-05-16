@@ -22,7 +22,7 @@ class AutoLayoutAlgorithmTest {
         val result = AutoLayoutAlgorithm.layout(memories, PaperSize.TWELVE_INCH_LANDSCAPE, photobook)
 
         assertEquals(2, result.pages.size)
-        assertEquals(PageTemplate.Single, result.pages[0].template)
+        assertEquals(PageTemplate.SingleLandscape, result.pages[0].template)
         assertEquals("content://test/1", result.pages[0].slots.first().imageRef?.imageUri)
         assertEquals(1f, result.pages[0].slots.first().cropScale, 0.001f)
     }

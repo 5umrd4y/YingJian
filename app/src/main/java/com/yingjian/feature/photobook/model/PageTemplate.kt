@@ -1,7 +1,8 @@
 package com.yingjian.feature.photobook.model
 
 enum class PageTemplate(val slotIds: List<String>) {
-    Single(listOf("slot-1")),
+    SingleLandscape(listOf("slot-1")),
+    SinglePortrait(listOf("slot-1")),
     TwoHorizontal(listOf("slot-1", "slot-2")),
     TwoVertical(listOf("slot-1", "slot-2")),
     GridFour(listOf("slot-1", "slot-2", "slot-3", "slot-4"));
