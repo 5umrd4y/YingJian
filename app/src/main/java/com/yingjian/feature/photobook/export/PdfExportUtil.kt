@@ -25,6 +25,7 @@ import com.yingjian.feature.photobook.model.TextElement
 import com.yingjian.feature.photobook.model.toPaintAlign
 import com.yingjian.feature.photobook.model.toStaticLayoutAlignment
 import java.io.ByteArrayOutputStream
+import java.io.OutputStream
 
 /**
  * Exports a BookState to a 300DPI PDF with crop marks.
@@ -51,79 +52,86 @@ object PdfExportUtil {
     }.getOrDefault(0xFFFAF9F6.toInt())
 
     fun exportPdf(context: Context, bookState: BookState): ByteArray {
+        val outputStream = ByteArrayOutputStream()
+        writePdf(context, bookState, outputStream)
+        return outputStream.toByteArray()
+    }
+
+    fun writePdf(context: Context, bookState: BookState, outputStream: OutputStream) {
         val document = PdfDocument()
 
-        // Try to load Noto Sans SC from assets, fall back to system default
-        val typeface = try {
-            Typeface.createFromAsset(context.assets, "fonts/NotoSansSC-Regular.ttf")
-        } catch (e: Exception) {
-            Typeface.DEFAULT
-        }
+        try {
+            // Try to load Noto Sans SC from assets, fall back to system default
+            val typeface = try {
+                Typeface.createFromAsset(context.assets, "fonts/NotoSansSC-Regular.ttf")
+            } catch (e: Exception) {
+                Typeface.DEFAULT
+            }
 
-        val paperSize = runCatching {
-            PaperSize.valueOf(bookState.photobook.paperSize)
-        }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
+            val paperSize = runCatching {
+                PaperSize.valueOf(bookState.photobook.paperSize)
+            }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
 
-        val pageWidthPx = mmToPx(paperSize.widthMm)
-        val pageHeightPx = mmToPx(paperSize.heightMm)
+            val pageWidthPx = mmToPx(paperSize.widthMm)
+            val pageHeightPx = mmToPx(paperSize.heightMm)
 
-        // 1. Cover page
-        val coverPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, 1).create()
-        val coverPage = document.startPage(coverPageInfo)
-        coverPage.canvas.drawColor(backgroundColorInt(bookState.coverLayout.backgroundColor))
-        renderCoverLayout(coverPage.canvas, bookState.coverLayout, typeface)
-        drawCropMarks(coverPage.canvas, pageWidthPx, pageHeightPx)
-        document.finishPage(coverPage)
+            // 1. Cover page
+            val coverPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, 1).create()
+            val coverPage = document.startPage(coverPageInfo)
+            coverPage.canvas.drawColor(backgroundColorInt(bookState.coverLayout.backgroundColor))
+            renderCoverLayout(coverPage.canvas, bookState.coverLayout, typeface)
+            drawCropMarks(coverPage.canvas, pageWidthPx, pageHeightPx)
+            document.finishPage(coverPage)
 
-        // 2. Content pages
-        bookState.pages.forEachIndexed { index, pageState ->
-            val pageNum = index + 2 // cover is page 1
-            val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, pageNum).create()
-            val page = document.startPage(pageInfo)
-            val canvas = page.canvas
+            // 2. Content pages
+            bookState.pages.forEachIndexed { index, pageState ->
+                val pageNum = index + 2 // cover is page 1
+                val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, pageNum).create()
+                val page = document.startPage(pageInfo)
+                val canvas = page.canvas
 
-            canvas.drawColor(0xFFFAF9F6.toInt())
+                canvas.drawColor(0xFFFAF9F6.toInt())
 
-            val slotRects = TemplateLayoutEngine.calculateSlots(
-                LayoutInput(
-                    trimWidthMm = pageState.trimWidthMm,
-                    trimHeightMm = pageState.trimHeightMm,
-                    bleedMm = pageState.bleedMm,
-                    safeMarginMm = PhotobookLayoutDefaults.SAFE_MARGIN_MM,
-                    bottomTextReserveMm = PhotobookLayoutDefaults.BOTTOM_TEXT_RESERVE_MM,
-                    gutterMm = PhotobookLayoutDefaults.GUTTER_MM,
-                    template = pageState.template
+                val slotRects = TemplateLayoutEngine.calculateSlots(
+                    LayoutInput(
+                        trimWidthMm = pageState.trimWidthMm,
+                        trimHeightMm = pageState.trimHeightMm,
+                        bleedMm = pageState.bleedMm,
+                        safeMarginMm = PhotobookLayoutDefaults.SAFE_MARGIN_MM,
+                        bottomTextReserveMm = PhotobookLayoutDefaults.BOTTOM_TEXT_RESERVE_MM,
+                        gutterMm = PhotobookLayoutDefaults.GUTTER_MM,
+                        template = pageState.template
+                    )
                 )
-            )
-            slotRects.forEach { rect ->
-                val slot = pageState.slots.firstOrNull { it.slotId == rect.slotId }
-                if (slot?.imageRef != null) {
-                    renderImageSlot(context, canvas, rect, slot)
+                slotRects.forEach { rect ->
+                    val slot = pageState.slots.firstOrNull { it.slotId == rect.slotId }
+                    if (slot?.imageRef != null) {
+                        renderImageSlot(context, canvas, rect, slot)
+                    }
                 }
-            }
-            pageState.textElements.sortedBy { it.zIndex }.forEach { element ->
-                renderText(canvas, element, typeface)
+                pageState.textElements.sortedBy { it.zIndex }.forEach { element ->
+                    renderText(canvas, element, typeface)
+                }
+
+                drawCropMarks(canvas, pageWidthPx, pageHeightPx)
+                drawPageNumber(canvas, pageState.pageNumber, pageWidthPx, pageHeightPx)
+
+                document.finishPage(page)
             }
 
-            drawCropMarks(canvas, pageWidthPx, pageHeightPx)
-            drawPageNumber(canvas, pageState.pageNumber, pageWidthPx, pageHeightPx)
+            // 3. Back cover page
+            val backPageNum = bookState.pages.size + 2
+            val backPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, backPageNum).create()
+            val backPage = document.startPage(backPageInfo)
+            backPage.canvas.drawColor(backgroundColorInt(bookState.backCoverLayout.backgroundColor))
+            renderCoverLayout(backPage.canvas, bookState.backCoverLayout, typeface)
+            drawCropMarks(backPage.canvas, pageWidthPx, pageHeightPx)
+            document.finishPage(backPage)
 
-            document.finishPage(page)
+            document.writeTo(outputStream)
+        } finally {
+            document.close()
         }
-
-        // 3. Back cover page
-        val backPageNum = bookState.pages.size + 2
-        val backPageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, backPageNum).create()
-        val backPage = document.startPage(backPageInfo)
-        backPage.canvas.drawColor(backgroundColorInt(bookState.backCoverLayout.backgroundColor))
-        renderCoverLayout(backPage.canvas, bookState.backCoverLayout, typeface)
-        drawCropMarks(backPage.canvas, pageWidthPx, pageHeightPx)
-        document.finishPage(backPage)
-
-        val outputStream = ByteArrayOutputStream()
-        document.writeTo(outputStream)
-        document.close()
-        return outputStream.toByteArray()
     }
 
     private fun mmToPx(mm: Float): Int = (mm * DPI / 25.4f).toInt()
@@ -171,13 +179,13 @@ object PdfExportUtil {
             val imageRef = slot.imageRef ?: return@runCatching
             val uri = Uri.parse(imageRef.imageUri)
             val inputStream = context.contentResolver.openInputStream(uri) ?: return@runCatching
-            val targetWidthPx = mmToPx(rect.widthMm * slot.cropScale)
-            val targetHeightPx = mmToPx(rect.heightMm * slot.cropScale)
+            val targetWidthPx = mmToPx(rect.widthMm * slot.cropScale).coerceAtLeast(1)
+            val targetHeightPx = mmToPx(rect.heightMm * slot.cropScale).coerceAtLeast(1)
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeStream(inputStream, null, options)
             inputStream.close()
 
-            val inSampleSize = calculateInSampleSize(
+            val inSampleSize = PdfImageRenderMath.calculateInSampleSize(
                 options.outWidth, options.outHeight,
                 targetWidthPx, targetHeightPx,
                 MAX_DECODE_DIMENSION_PX
@@ -199,48 +207,24 @@ object PdfExportUtil {
 
             canvas.save()
             canvas.clipRect(RectF(x, y, x + w, y + h))
-            val scaledW = w * slot.cropScale
-            val scaledH = h * slot.cropScale
             val dx = mmToPxFloat(slot.cropOffsetX)
             val dy = mmToPxFloat(slot.cropOffsetY)
-            val dest = RectF(
-                x - (scaledW - w) / 2f + dx,
-                y - (scaledH - h) / 2f + dy,
-                x + w + (scaledW - w) / 2f + dx,
-                y + h + (scaledH - h) / 2f + dy
+            val dest = PdfImageRenderMath.destinationRect(
+                slotLeft = x,
+                slotTop = y,
+                slotWidth = w,
+                slotHeight = h,
+                imageWidth = bitmap.width,
+                imageHeight = bitmap.height,
+                fitMode = slot.fitMode,
+                cropScale = slot.cropScale,
+                offsetX = dx,
+                offsetY = dy
             )
-            canvas.drawBitmap(bitmap, null, dest, null)
+            canvas.drawBitmap(bitmap, null, RectF(dest.left, dest.top, dest.right, dest.bottom), null)
             canvas.restore()
             bitmap.recycle()
         }
-    }
-
-    private fun calculateInSampleSize(
-        reqWidth: Int,
-        reqHeight: Int,
-        targetWidth: Int,
-        targetHeight: Int,
-        maxDecodeDim: Int = 4096
-    ): Int {
-        // First ensure decoded bitmap doesn't exceed max dimension (prevents OOM)
-        var inSampleSize = 1
-        if (reqWidth > maxDecodeDim || reqHeight > maxDecodeDim) {
-            val maxOriginal = maxOf(reqWidth, reqHeight)
-            inSampleSize = Integer.highestOneBit(maxOriginal / maxDecodeDim).coerceAtLeast(1)
-        }
-        // Then further downsample for the target size
-        if (reqHeight > targetHeight || reqWidth > targetWidth) {
-            val halfHeight = reqHeight / (2 * inSampleSize)
-            val halfWidth = reqWidth / (2 * inSampleSize)
-            var inner = inSampleSize
-            while ((halfHeight / inner) >= targetHeight &&
-                (halfWidth / inner) >= targetWidth
-            ) {
-                inner *= 2
-            }
-            inSampleSize = inner
-        }
-        return inSampleSize
     }
 
     private fun renderText(canvas: Canvas, element: TextElement, typeface: Typeface) {

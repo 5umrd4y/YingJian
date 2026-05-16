@@ -451,20 +451,34 @@ fun YingJianNavHost(
                 }
             }
 
-            val pdfBytesState = remember { mutableStateOf<ByteArray?>(null) }
             var isExportingPdf by remember { mutableStateOf(false) }
             val editorSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+            val coroutineScope = rememberCoroutineScope()
+            var pendingPdfExportState by remember { mutableStateOf<BookState?>(null) }
             val createPdf = rememberLauncherForActivityResult(
                 ActivityResultContracts.CreateDocument("application/pdf")
             ) { uri ->
-                uri?.let {
-                    val bytes = pdfBytesState.value ?: return@let
-                    context.contentResolver.openOutputStream(it)?.use { stream ->
-                        stream.write(bytes)
+                val exportState = pendingPdfExportState
+                pendingPdfExportState = null
+                if (uri == null || exportState == null) {
+                    isExportingPdf = false
+                    return@rememberLauncherForActivityResult
+                }
+                coroutineScope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            context.contentResolver.openOutputStream(uri)?.use { stream ->
+                                PdfExportUtil.writePdf(context, exportState, stream)
+                            } ?: error("Unable to open PDF output stream")
+                        }
+                    }.onSuccess {
+                        editorSnackbarHostState.showSnackbar("PDF已导出")
+                    }.onFailure {
+                        editorSnackbarHostState.showSnackbar("导出失败，请重试")
                     }
+                    isExportingPdf = false
                 }
             }
-            val coroutineScope = rememberCoroutineScope()
 
             // State for swap mode: when swap is initiated, track the source slot
             var swapSourceSlotId by remember { mutableStateOf<String?>(null) }
@@ -612,18 +626,15 @@ fun YingJianNavHost(
                     },
                     onExportPdf = {
                         isExportingPdf = true
-                        coroutineScope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    PdfExportUtil.exportPdf(context, theBookState)
-                                }
-                            }.onSuccess { bytes ->
-                                pdfBytesState.value = bytes
-                                createPdf.launch("photobook.pdf")
-                            }.onFailure {
-                                editorSnackbarHostState.showSnackbar("导出失败，请重试")
-                            }
+                        pendingPdfExportState = theBookState
+                        runCatching {
+                            createPdf.launch("photobook.pdf")
+                        }.onFailure {
+                            pendingPdfExportState = null
                             isExportingPdf = false
+                            coroutineScope.launch {
+                                editorSnackbarHostState.showSnackbar("无法打开保存位置")
+                            }
                         }
                     },
                     onNavigateToPreview = {
@@ -835,27 +846,36 @@ fun YingJianNavHost(
             }
 
             val context = LocalContext.current
+            val previewCoroutineScope = rememberCoroutineScope()
 
             loadedBookState?.let { state ->
                 PhotobookPreviewScreen(
                     bookState = state,
                     onBack = { navController.popBackStack() },
                     onShare = {
-                        val bytes = PdfExportUtil.exportPdf(context, state)
-                        val cacheDir = context.cacheDir
-                        val shareFile = java.io.File(cacheDir, "photobook_${state.photobook.id}.pdf")
-                        shareFile.writeBytes(bytes)
-                        val uri = androidx.core.content.FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            shareFile
-                        )
-                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "application/pdf"
-                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        previewCoroutineScope.launch {
+                            runCatching {
+                                val shareFile = withContext(Dispatchers.IO) {
+                                    val cacheDir = context.cacheDir
+                                    java.io.File(cacheDir, "photobook_${state.photobook.id}.pdf").also { file ->
+                                        file.outputStream().use { stream ->
+                                            PdfExportUtil.writePdf(context, state, stream)
+                                        }
+                                    }
+                                }
+                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    shareFile
+                                )
+                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "分享画册"))
+                            }
                         }
-                        context.startActivity(android.content.Intent.createChooser(shareIntent, "分享画册"))
                     }
                 )
             } ?: run {
