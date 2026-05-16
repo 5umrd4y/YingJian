@@ -334,31 +334,46 @@ private fun PreviewLeaf(
     val scaleFactor = containerWidthPx.toFloat() / pageWidthPx.toFloat()
 
     when (leaf) {
-        is PhotobookLeaf.Cover -> CoverPageRenderer(
-            layout = leaf.layout,
-            scaleFactor = scaleFactor,
-            selectedTextId = null,
-            onTextSelected = { },
-            onTextMoved = { _, _, _ -> },
-            modifier = modifier
-        )
-        is PhotobookLeaf.Content -> ContentPageRenderer(
-            pageState = leaf.page,
-            scaleFactor = scaleFactor,
-            selectedSlotId = null,
-            onSlotSelected = { },
-            onEmptySlotAddClicked = { },
-            onSlotImageAdjusted = { _, _, _, _ -> },
-            modifier = modifier
-        )
-        is PhotobookLeaf.BackCover -> CoverPageRenderer(
-            layout = leaf.layout,
-            scaleFactor = scaleFactor,
-            selectedTextId = null,
-            onTextSelected = { },
-            onTextMoved = { _, _, _ -> },
-            modifier = modifier
-        )
+        is PhotobookLeaf.Cover -> PhotobookStage(
+            modifier = modifier,
+            maxWidth = containerWidthDp,
+            backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR)
+        ) { stageScale ->
+            CoverPageRenderer(
+                layout = leaf.layout,
+                scaleFactor = stageScale,
+                selectedTextId = null,
+                onTextSelected = { },
+                onTextMoved = { _, _, _ -> }
+            )
+        }
+        is PhotobookLeaf.Content -> PhotobookStage(
+            modifier = modifier,
+            maxWidth = containerWidthDp,
+            backgroundColor = Color(PhotobookLayoutDefaults.CONTENT_PAGE_COLOR)
+        ) { stageScale ->
+            ContentPageRenderer(
+                pageState = leaf.page,
+                scaleFactor = stageScale,
+                selectedSlotId = null,
+                onSlotSelected = { },
+                onEmptySlotAddClicked = { },
+                onSlotImageAdjusted = { _, _, _, _ -> }
+            )
+        }
+        is PhotobookLeaf.BackCover -> PhotobookStage(
+            modifier = modifier,
+            maxWidth = containerWidthDp,
+            backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR)
+        ) { stageScale ->
+            CoverPageRenderer(
+                layout = leaf.layout,
+                scaleFactor = stageScale,
+                selectedTextId = null,
+                onTextSelected = { },
+                onTextMoved = { _, _, _ -> }
+            )
+        }
     }
 }
 

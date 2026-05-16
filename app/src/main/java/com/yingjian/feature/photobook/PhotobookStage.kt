@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -25,6 +26,7 @@ fun PhotobookStage(
     val scaleFactor = maxWidth.value / PhotobookLayoutDefaults.PAGE_WIDTH_MM
     Box(
         modifier = modifier
+            .widthIn(max = maxWidth)
             .fillMaxWidth()
             .aspectRatio(PhotobookLayoutDefaults.PAGE_WIDTH_MM / PhotobookLayoutDefaults.PAGE_HEIGHT_MM)
             .shadow(4.dp, RoundedCornerShape(4.dp))

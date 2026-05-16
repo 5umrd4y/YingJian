@@ -18,6 +18,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import com.yingjian.AppDependencies
 import com.yingjian.feature.memories.MemoriesScreen
 import com.yingjian.feature.memories.MemoriesViewModel
@@ -354,10 +356,16 @@ fun YingJianNavHost(
                 }
             }
         }
-        composable(NavDestinations.PhotoPicker.route) { backStackEntry ->
+        composable(NavDestinations.PhotoPicker.route,
+            arguments = listOf(navArgument("mode") {
+                type = NavType.StringType
+                defaultValue = ""
+            })
+        ) { backStackEntry ->
             val allMemories = rememberLoadedMemories(deps.memoryRepository)
-            val isAppendMode = backStackEntry.savedStateHandle.get<String>("appendMode") == "true"
-            val isFillSlotMode = backStackEntry.savedStateHandle.get<String>("fillSlotMode") == "true"
+            val modeArg = backStackEntry.arguments?.getString("mode") ?: ""
+            val isFillSlotMode = modeArg == "fillSlot"
+            val isAppendMode = modeArg == "append"
             val mode = if (isFillSlotMode) MemoryPhotoPickerMode.SingleSlot else MemoryPhotoPickerMode.BatchImport
 
             PhotoPickerScreen(
@@ -368,8 +376,7 @@ fun YingJianNavHost(
                     if (isFillSlotMode) {
                         // Return fill slot result via savedStateHandle
                         val encoded = SelectedMemoryPhotoCodec.encode(selectedPhotos)
-                        backStackEntry.savedStateHandle.set("fillSlotResult", encoded)
-                        backStackEntry.savedStateHandle.remove<String>("fillSlotMode")
+                        navController.previousBackStackEntry?.savedStateHandle?.set("fillSlotResult", encoded)
                         navController.popBackStack()
                     } else {
                         val encoded = SelectedMemoryPhotoCodec.encode(selectedPhotos)
@@ -627,9 +634,7 @@ fun YingJianNavHost(
                         navController.navigate(NavDestinations.Preview.createRoute(theBookState.photobook.id))
                     },
                     onAddPhotos = {
-                        navController.currentBackStackEntry?.savedStateHandle?.set("appendMode", "true")
-                        navController.currentBackStackEntry?.savedStateHandle?.set("editorPhotobookId", theBookState.photobook.id.toString())
-                        navController.navigate(NavDestinations.PhotoPicker.route)
+                        navController.navigate(NavDestinations.PhotoPicker.createRoute(mode = "append"))
                     },
                     onSetCover = {
                         val currentPage = loadedBookState?.currentPage ?: 0
@@ -737,8 +742,7 @@ fun YingJianNavHost(
                         val selectedSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
                         fillSlotState = state
                         fillSlotTargetSlotId = selectedSlotId
-                        navController.currentBackStackEntry?.savedStateHandle?.set("fillSlotMode", "true")
-                        navController.navigate(NavDestinations.PhotoPicker.route)
+                        navController.navigate(NavDestinations.PhotoPicker.createRoute(mode = "fillSlot"))
                     },
                     onSwapSelectedWithSlot = { targetSlotId ->
                         val state = loadedBookState ?: return@PhotobookEditorScreen
@@ -765,6 +769,9 @@ fun YingJianNavHost(
                             newPage = newPage
                         )
                         loadedBookState = state.copy(pages = updatedPages, currentPage = state.currentPage + 1, selectedSlotId = "slot-1")
+                    },
+                    onSelectLeaf = { leafIndex ->
+                        // No-op: navigation is driven by editor's local state
                     },
                     onUpdateCoverLayout = { newCoverLayout ->
                         loadedBookState = loadedBookState?.copy(coverLayout = newCoverLayout)

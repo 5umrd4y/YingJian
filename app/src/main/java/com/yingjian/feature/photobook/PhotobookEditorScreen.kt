@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -59,10 +60,12 @@ import androidx.compose.ui.unit.dp
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.CoverLayout
 import com.yingjian.feature.photobook.model.CoverPageType
+import com.yingjian.feature.photobook.model.CoverTextRole
 import com.yingjian.feature.photobook.model.PageTemplate
 import com.yingjian.feature.photobook.model.PhotobookLayoutDefaults
 import com.yingjian.feature.photobook.model.TypedEditorSelection
 import com.yingjian.feature.photobook.model.moveText
+import com.yingjian.feature.photobook.model.updateText
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,6 +95,7 @@ fun PhotobookEditorScreen(
     isExportingPdf: Boolean = false,
     onTextAction: () -> Unit = {},
     onAddPage: () -> Unit = {},
+    onSelectLeaf: (Int) -> Unit = {},
     onUpdateCoverLayout: (CoverLayout) -> Unit = {},
     onUpdateBackCoverLayout: (CoverLayout) -> Unit = {}
 ) {
@@ -99,6 +103,11 @@ fun PhotobookEditorScreen(
     val maxLeafIndex = (leafCount - 1).coerceAtLeast(0)
     var currentLeafIndex by remember(bookState.photobook.id) { mutableIntStateOf(0) }
     var showCoverSheet by remember { mutableStateOf(false) }
+    var showLayoutSheet by remember { mutableStateOf(false) }
+    var showMoveSheet by remember { mutableStateOf(false) }
+    var editingTextPageType by remember { mutableStateOf<CoverPageType?>(null) }
+    var editingTextId by remember { mutableStateOf<String?>(null) }
+    var editingTextValue by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -111,6 +120,14 @@ fun PhotobookEditorScreen(
         }
     }
 
+    // Sync to externally-set currentPage (e.g. from onAddPage)
+    LaunchedEffect(bookState.currentPage) {
+        val expectedLeaf = (bookState.currentPage + 1).coerceIn(0, maxLeafIndex)
+        if (currentLeafIndex != expectedLeaf) {
+            currentLeafIndex = expectedLeaf
+        }
+    }
+
     fun selectLeaf(targetIndex: Int) {
         val nextLeafIndex = targetIndex.coerceIn(0, maxLeafIndex)
         currentLeafIndex = nextLeafIndex
@@ -119,6 +136,21 @@ fun PhotobookEditorScreen(
         if (contentPageIndex in bookState.pages.indices) {
             onContentPageSelected(contentPageIndex)
         }
+    }
+
+    fun openCoverTextEditor(pageType: CoverPageType, layout: CoverLayout) {
+        val selectedId = (bookState.selection as? TypedEditorSelection.CoverText)
+            ?.takeIf { it.pageType == pageType }
+            ?.textId
+        val element = selectedId
+            ?.let { id -> layout.textElements.firstOrNull { it.id == id && it.role != CoverTextRole.Divider } }
+            ?: layout.textElements.firstOrNull { it.role == CoverTextRole.Title }
+            ?: layout.textElements.firstOrNull { it.role != CoverTextRole.Divider }
+            ?: return
+        onUpdateState(bookState.copy(selection = TypedEditorSelection.CoverText(pageType, element.id)))
+        editingTextPageType = pageType
+        editingTextId = element.id
+        editingTextValue = element.text
     }
 
     Scaffold(
@@ -184,9 +216,19 @@ fun PhotobookEditorScreen(
         ) {
             // Floating toolbar at top center
             FloatingPhotobookToolbar(
-                onLayoutClicked = { /* handled by segmented button row */ },
-                onTextClicked = onTextAction,
-                onMoveClicked = { /* show move sheet */ },
+                onLayoutClicked = {
+                    if (!isCoverLeaf && !isBackCoverLeaf) showLayoutSheet = true
+                },
+                onTextClicked = {
+                    when {
+                        isCoverLeaf -> openCoverTextEditor(CoverPageType.Cover, bookState.coverLayout)
+                        isBackCoverLeaf -> openCoverTextEditor(CoverPageType.BackCover, bookState.backCoverLayout)
+                        else -> onTextAction()
+                    }
+                },
+                onMoveClicked = {
+                    if (!isCoverLeaf && !isBackCoverLeaf && bookState.selectedSlotId != null) showMoveSheet = true
+                },
                 onDeleteClicked = onDeleteSelectedSlotImage,
                 onAddPageClicked = onAddPage,
                 modifier = Modifier
@@ -216,34 +258,46 @@ fun PhotobookEditorScreen(
                 ) { leafIndex ->
                     when {
                         leafIndex == 0 -> {
-                            CoverPageRenderer(
-                                layout = bookState.coverLayout,
-                                scaleFactor = 1f,
-                                selectedTextId = (bookState.selection as? TypedEditorSelection.CoverText)
-                                    ?.takeIf { it.pageType == CoverPageType.Cover }
-                                    ?.textId,
-                                onTextSelected = { textId ->
-                                    onUpdateState(bookState.copy(selection = TypedEditorSelection.CoverText(CoverPageType.Cover, textId)))
-                                },
-                                onTextMoved = { textId, xMm, yMm ->
-                                    onUpdateCoverLayout(bookState.coverLayout.moveText(textId, xMm, yMm))
-                                }
-                            )
+                            PhotobookStage(
+                                modifier = Modifier,
+                                maxWidth = 300.dp,
+                                backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR)
+                            ) { scaleFactor ->
+                                CoverPageRenderer(
+                                    layout = bookState.coverLayout,
+                                    scaleFactor = scaleFactor,
+                                    selectedTextId = (bookState.selection as? TypedEditorSelection.CoverText)
+                                        ?.takeIf { it.pageType == CoverPageType.Cover }
+                                        ?.textId,
+                                    onTextSelected = { textId ->
+                                        onUpdateState(bookState.copy(selection = TypedEditorSelection.CoverText(CoverPageType.Cover, textId)))
+                                    },
+                                    onTextMoved = { textId, xMm, yMm ->
+                                        onUpdateCoverLayout(bookState.coverLayout.moveText(textId, xMm, yMm))
+                                    }
+                                )
+                            }
                         }
                         leafIndex == leafCount - 1 -> {
-                            CoverPageRenderer(
-                                layout = bookState.backCoverLayout,
-                                scaleFactor = 1f,
-                                selectedTextId = (bookState.selection as? TypedEditorSelection.CoverText)
-                                    ?.takeIf { it.pageType == CoverPageType.BackCover }
-                                    ?.textId,
-                                onTextSelected = { textId ->
-                                    onUpdateState(bookState.copy(selection = TypedEditorSelection.CoverText(CoverPageType.BackCover, textId)))
-                                },
-                                onTextMoved = { textId, xMm, yMm ->
-                                    onUpdateBackCoverLayout(bookState.backCoverLayout.moveText(textId, xMm, yMm))
-                                }
-                            )
+                            PhotobookStage(
+                                modifier = Modifier,
+                                maxWidth = 300.dp,
+                                backgroundColor = Color(PhotobookLayoutDefaults.COVER_PAGE_COLOR)
+                            ) { scaleFactor ->
+                                CoverPageRenderer(
+                                    layout = bookState.backCoverLayout,
+                                    scaleFactor = scaleFactor,
+                                    selectedTextId = (bookState.selection as? TypedEditorSelection.CoverText)
+                                        ?.takeIf { it.pageType == CoverPageType.BackCover }
+                                        ?.textId,
+                                    onTextSelected = { textId ->
+                                        onUpdateState(bookState.copy(selection = TypedEditorSelection.CoverText(CoverPageType.BackCover, textId)))
+                                    },
+                                    onTextMoved = { textId, xMm, yMm ->
+                                        onUpdateBackCoverLayout(bookState.backCoverLayout.moveText(textId, xMm, yMm))
+                                    }
+                                )
+                            }
                         }
                         else -> {
                             val cp = leafIndex - 1
@@ -414,6 +468,150 @@ fun PhotobookEditorScreen(
                         Text("确认")
                     }
                 }
+            }
+        }
+    }
+
+    if (showLayoutSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showLayoutSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "选择版型",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                SingleChoiceSegmentedButtonRow {
+                    PageTemplate.entries.forEachIndexed { index, template ->
+                        SegmentedButton(
+                            selected = false,
+                            onClick = {
+                                onChangeTemplate(template)
+                                showLayoutSheet = false
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = PageTemplate.entries.size),
+                            label = {
+                                Text(
+                                    when (template) {
+                                        PageTemplate.SingleLandscape -> "横图"
+                                        PageTemplate.SinglePortrait -> "竖图"
+                                        PageTemplate.TwoHorizontal -> "上下"
+                                        PageTemplate.TwoVertical -> "左右"
+                                        PageTemplate.GridFour -> "四宫格"
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.padding(8.dp))
+            }
+        }
+    }
+
+    if (showMoveSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showMoveSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "移动图片",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    FilledTonalButton(
+                        onClick = {
+                            onMoveSelectedToPreviousPage()
+                            showMoveSheet = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("移到上一页") }
+                    FilledTonalButton(
+                        onClick = {
+                            onMoveSelectedToNextPage()
+                            showMoveSheet = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("移到下一页") }
+                    FilledTonalButton(
+                        onClick = {
+                            onMoveSelectedToNewPage()
+                            showMoveSheet = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("新建页面") }
+                }
+                Spacer(modifier = Modifier.padding(8.dp))
+            }
+        }
+    }
+
+    val activeEditingTextPageType = editingTextPageType
+    val activeEditingTextId = editingTextId
+    if (activeEditingTextPageType != null && activeEditingTextId != null) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                editingTextPageType = null
+                editingTextId = null
+                editingTextValue = ""
+            },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "编辑文字",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                OutlinedTextField(
+                    value = editingTextValue,
+                    onValueChange = { editingTextValue = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    maxLines = 3
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = {
+                        editingTextPageType = null
+                        editingTextId = null
+                        editingTextValue = ""
+                    }) {
+                        Text("取消")
+                    }
+                    FilledTonalButton(onClick = {
+                        when (activeEditingTextPageType) {
+                            CoverPageType.Cover -> onUpdateCoverLayout(bookState.coverLayout.updateText(activeEditingTextId, editingTextValue))
+                            CoverPageType.BackCover -> onUpdateBackCoverLayout(bookState.backCoverLayout.updateText(activeEditingTextId, editingTextValue))
+                        }
+                        editingTextPageType = null
+                        editingTextId = null
+                        editingTextValue = ""
+                    }) {
+                        Text("保存")
+                    }
+                }
+                Spacer(modifier = Modifier.padding(8.dp))
             }
         }
     }

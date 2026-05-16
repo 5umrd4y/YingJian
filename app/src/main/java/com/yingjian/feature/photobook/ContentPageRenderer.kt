@@ -75,48 +75,50 @@ fun ContentPageRenderer(
         )
     }
 
-    val activeSlotIds = pageState.template.slotIds
-    slotRects.forEach { rect ->
-        val slot = pageState.slots.firstOrNull { it.slotId == rect.slotId }
-        if (rect.slotId in activeSlotIds) {
-            RenderImageSlot(
-                rect = rect,
-                slot = slot,
+    Box(modifier = modifier.fillMaxSize()) {
+        val activeSlotIds = pageState.template.slotIds
+        slotRects.forEach { rect ->
+            val slot = pageState.slots.firstOrNull { it.slotId == rect.slotId }
+            if (rect.slotId in activeSlotIds) {
+                RenderImageSlot(
+                    rect = rect,
+                    slot = slot,
+                    scaleFactor = scaleFactor,
+                    isSelected = selectedSlotId == rect.slotId,
+                    onSelect = { onSlotSelected(rect.slotId) },
+                    onEmptyClicked = { onEmptySlotAddClicked(rect.slotId) },
+                    onAdjusted = { offsetXMm, offsetYMm, scale ->
+                        onSlotImageAdjusted(rect.slotId, offsetXMm, offsetYMm, scale)
+                    },
+                    density = density
+                )
+            }
+        }
+        pageState.textElements.forEach { element ->
+            RenderPrinterTextElement(
+                element = element,
                 scaleFactor = scaleFactor,
-                isSelected = selectedSlotId == rect.slotId,
-                onSelect = { onSlotSelected(rect.slotId) },
-                onEmptyClicked = { onEmptySlotAddClicked(rect.slotId) },
-                onAdjusted = { offsetXMm, offsetYMm, scale ->
-                    onSlotImageAdjusted(rect.slotId, offsetXMm, offsetYMm, scale)
-                },
+                dateText = memoryDate?.let { formatDate(it) },
                 density = density
             )
         }
-    }
-    pageState.textElements.forEach { element ->
-        RenderPrinterTextElement(
-            element = element,
-            scaleFactor = scaleFactor,
-            dateText = memoryDate?.let { formatDate(it) },
-            density = density
-        )
-    }
 
-    // Page number (bottom-right)
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomEnd
-    ) {
-        Text(
-            text = "${pageState.pageNumber}",
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = (11f * scaleFactor).sp,
-                fontWeight = FontWeight.ExtraLight,
-                letterSpacing = (0.2f * scaleFactor).sp
-            ),
-            color = MaterialTheme.colorScheme.outlineVariant,
-            modifier = Modifier.padding((12f * scaleFactor).dp)
-        )
+        // Page number (bottom-right)
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomEnd
+        ) {
+            Text(
+                text = "${pageState.pageNumber}",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = (11f * scaleFactor).sp,
+                    fontWeight = FontWeight.ExtraLight,
+                    letterSpacing = (0.2f * scaleFactor).sp
+                ),
+                color = MaterialTheme.colorScheme.outlineVariant,
+                modifier = Modifier.padding((12f * scaleFactor).dp)
+            )
+        }
     }
 }
 

@@ -10,7 +10,10 @@ sealed class NavDestinations(val route: String) {
     data object MemoryDetail : NavDestinations("memory_detail/{memoryId}") {
         fun createRoute(memoryId: Long) = "memory_detail/$memoryId"
     }
-    data object PhotoPicker : NavDestinations("photo_picker")
+    data object PhotoPicker : NavDestinations("photo_picker?mode={mode}") {
+        fun createRoute(mode: String = "") =
+            if (mode.isEmpty()) "photo_picker" else "photo_picker?mode=$mode"
+    }
     data object PhotobookEditor : NavDestinations("photobook_editor/{photobookId}") {
         fun createRoute(photobookId: Long) = "photobook_editor/$photobookId"
     }

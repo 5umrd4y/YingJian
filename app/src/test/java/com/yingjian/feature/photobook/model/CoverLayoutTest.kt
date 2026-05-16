@@ -26,4 +26,14 @@ class CoverLayoutTest {
         assertEquals(android.graphics.Paint.Align.CENTER, PhotobookTextAlign.Center.toPaintAlign())
         assertEquals(android.text.Layout.Alignment.ALIGN_OPPOSITE, PhotobookTextAlign.End.toStaticLayoutAlignment())
     }
+
+    @Test
+    fun `update text changes only target element`() {
+        val layout = CoverLayoutDefaults.defaultCover(title = "Old", subtitle = "Sub")
+
+        val updated = layout.updateText("cover-title", "New")
+
+        assertEquals("New", updated.textElements.first { it.id == "cover-title" }.text)
+        assertEquals("Sub", updated.textElements.first { it.id == "cover-subtitle" }.text)
+    }
 }

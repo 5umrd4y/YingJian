@@ -57,6 +57,12 @@ fun CoverLayout.moveText(textId: String, xMm: Float, yMm: Float): CoverLayout = 
     }
 )
 
+fun CoverLayout.updateText(textId: String, text: String): CoverLayout = copy(
+    textElements = textElements.map { element ->
+        if (element.id == textId) element.copy(text = text) else element
+    }
+)
+
 object CoverLayoutDefaults {
     const val BACKGROUND = "#AAA194"
 
