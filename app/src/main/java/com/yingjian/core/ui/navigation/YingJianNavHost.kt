@@ -496,7 +496,9 @@ fun YingJianNavHost(
                                     memoryId = photo.memoryId,
                                     imageUri = photo.imageUri,
                                     sourceImageIndex = photo.sourceImageIndex,
-                                    sourceImageId = photo.sourceImageId
+                                    sourceImageId = photo.sourceImageId,
+                                    imageWidth = photo.imageWidth,
+                                    imageHeight = photo.imageHeight
                                 )
                                 val cp = savedFillState.currentPage
                                 val page = savedFillState.pages.getOrNull(cp)
@@ -804,11 +806,26 @@ fun YingJianNavHost(
                                 trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
                             )
                         }
+                        val previewCoverLayout = photobook.coverLayoutJson
+                            ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
+                            ?: CoverLayoutDefaults.defaultCover(
+                                title = photobook.coverTitle ?: photobook.name,
+                                subtitle = photobook.coverSubtitle ?: ""
+                            )
+                        val previewBackCoverLayout = photobook.backCoverLayoutJson
+                            ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
+                            ?: CoverLayoutDefaults.defaultBackCover(
+                                title = photobook.backTitle ?: photobook.name,
+                                subtitle = photobook.backSubtitle ?: "",
+                                dateText = photobook.backDateText ?: ""
+                            )
                         loadedBookState = BookState(
                             photobook = photobook,
                             pages = pages,
                             currentPage = 0,
-                            mode = LayoutMode.MANUAL
+                            mode = LayoutMode.MANUAL,
+                            coverLayout = previewCoverLayout,
+                            backCoverLayout = previewBackCoverLayout
                         )
                     }
                 }
