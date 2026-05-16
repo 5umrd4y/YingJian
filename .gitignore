@@ -1,0 +1,48 @@
+# Gradle / Android
+.gradle/
+build/
+**/build/
+captures/
+.cxx/
+
+# Local machine configuration
+local.properties
+*.iml
+.idea/
+.vscode/
+.kotlin/
+.DS_Store
+
+# Signing and secrets
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+google-services.json
+secrets.properties
+*.env
+.env*
+
+# Generated binaries
+*.apk
+*.aab
+*.ap_
+*.dex
+gradle-*.zip
+icon_*.png
+
+# Local AI/design scratch output
+.claude/
+.cospec/
+.superpowers/
+docs/claude/
+docs/superpowers/plans/2026-05-10-*.md
+docs/superpowers/specs/2026-05-10-*.md
+stitch_yingjian*/
+*审阅结果*.md
+*审阅报告*.md
+需求说明.md
+开发计划审阅结果.md
+画册模块调整审阅结果.md
+Phase2开发计划审阅结果.md
