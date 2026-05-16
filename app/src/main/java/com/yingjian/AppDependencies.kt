@@ -15,7 +15,7 @@ class AppDependencies(context: Context) {
         context.applicationContext,
         YingJianDatabase::class.java,
         YingJianDatabase.DATABASE_NAME
-    ).build()
+    ).fallbackToDestructiveMigration().build()
 
     val memoryRepository: MemoryRepository by lazy {
         MemoryRepositoryImpl(database.memoryDao())

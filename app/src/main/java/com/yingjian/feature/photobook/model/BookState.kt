@@ -56,11 +56,32 @@ data class EditorSelection(
     val slotId: String?
 )
 
+sealed interface TypedEditorSelection {
+    data class ImageSlot(val pageIndex: Int, val slotId: String) : TypedEditorSelection
+    data class CoverText(val pageType: CoverPageType, val textId: String) : TypedEditorSelection
+    data object None : TypedEditorSelection
+}
+
+data class PendingSlotFill(
+    val pageIndex: Int,
+    val slotId: String
+)
+
 data class BookState(
     val photobook: com.yingjian.core.data.database.PhotobookEntity,
     val pages: List<PageState>,
     val currentPage: Int,
     val mode: LayoutMode,
     val selectedSlotId: String? = null,
+    val selection: TypedEditorSelection = TypedEditorSelection.None,
+    val coverLayout: CoverLayout = CoverLayoutDefaults.defaultCover(
+        title = photobook.coverTitle ?: photobook.name,
+        subtitle = photobook.coverSubtitle ?: ""
+    ),
+    val backCoverLayout: CoverLayout = CoverLayoutDefaults.defaultBackCover(
+        title = photobook.backTitle ?: photobook.name,
+        subtitle = photobook.backSubtitle ?: "",
+        dateText = photobook.backDateText ?: ""
+    ),
     val previousManualState: BookState? = null
 )
