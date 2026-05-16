@@ -39,6 +39,7 @@ import com.yingjian.feature.photobook.export.PdfExportUtil
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
 import com.yingjian.feature.photobook.model.CoverLayout
+import com.yingjian.feature.photobook.model.CoverLayoutDefaults
 import com.yingjian.feature.photobook.model.CoverPageType
 import com.yingjian.feature.photobook.model.LayoutMode
 import com.yingjian.feature.photobook.model.PageState
@@ -49,6 +50,7 @@ import com.yingjian.feature.settings.SettingsScreen
 import com.yingjian.feature.settings.AboutScreen
 import com.yingjian.core.data.database.MemoryRecordEntity
 import com.yingjian.core.data.database.PageLayoutEntity
+import com.yingjian.core.util.CoverLayoutSerializer
 import com.yingjian.core.util.PageLayoutDocumentSerializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -417,11 +419,26 @@ fun YingJianNavHost(
                                 trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
                             )
                         }
+                        val coverLayout = photobook.coverLayoutJson
+                            ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
+                            ?: CoverLayoutDefaults.defaultCover(
+                                title = photobook.coverTitle ?: photobook.name,
+                                subtitle = photobook.coverSubtitle ?: ""
+                            )
+                        val backCoverLayout = photobook.backCoverLayoutJson
+                            ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
+                            ?: CoverLayoutDefaults.defaultBackCover(
+                                title = photobook.backTitle ?: photobook.name,
+                                subtitle = photobook.backSubtitle ?: "",
+                                dateText = photobook.backDateText ?: ""
+                            )
                         loadedBookState = BookState(
                             photobook = photobook,
                             pages = pages,
                             currentPage = 0,
-                            mode = LayoutMode.MANUAL
+                            mode = LayoutMode.MANUAL,
+                            coverLayout = coverLayout,
+                            backCoverLayout = backCoverLayout
                         )
                     }
                 }
@@ -578,7 +595,12 @@ fun YingJianNavHost(
                                             )
                                         )
                                     }
-                                    deps.photobookRepository.updatePhotobook(currentState.photobook)
+                                    val updatedPhotobook = currentState.photobook.copy(
+                                        coverLayoutJson = CoverLayoutSerializer.serialize(currentState.coverLayout),
+                                        backCoverLayoutJson = CoverLayoutSerializer.serialize(currentState.backCoverLayout),
+                                        updatedAt = System.currentTimeMillis()
+                                    )
+                                    deps.photobookRepository.updatePhotobook(updatedPhotobook)
                                 }
                             }
                         }
