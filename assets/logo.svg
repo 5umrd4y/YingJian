@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A69B8F;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8c7e6c;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Rounded Square Background (MD3 inspired) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="#A69B8F" />
+  
+  <!-- Abstract Book/Paper and Shadow symbol -->
+  <!-- Two overlapping shapes representing pages and layers of light/shadow -->
+  <path d="M320 380 L704 380 L704 700 L320 700 Z" fill="white" fill-opacity="0.1" />
+  <path d="M280 320 L664 320 L664 640 L280 640 Z" fill="white" />
+  
+  <!-- Minimalist "YJ" or "Shadow" line -->
+  <path d="M420 480 L524 480" stroke="#A69B8F" stroke-width="24" stroke-linecap="round" />
+  <path d="M420 540 L480 540" stroke="#A69B8F" stroke-width="24" stroke-linecap="round" />
+</svg>

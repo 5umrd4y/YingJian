@@ -37,6 +37,7 @@ icon_*.png
 .claude/
 .cospec/
 .superpowers/
+docs/
 docs/claude/
 docs/superpowers/plans/2026-05-10-*.md
 docs/superpowers/specs/2026-05-10-*.md
