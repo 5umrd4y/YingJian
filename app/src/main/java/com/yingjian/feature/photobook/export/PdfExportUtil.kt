@@ -51,13 +51,22 @@ object PdfExportUtil {
         android.graphics.Color.parseColor(hex)
     }.getOrDefault(0xFFFAF9F6.toInt())
 
-    fun exportPdf(context: Context, bookState: BookState): ByteArray {
+    fun exportPdf(
+        context: Context,
+        bookState: BookState,
+        memoryTimestamps: Map<Long, Long> = emptyMap()
+    ): ByteArray {
         val outputStream = ByteArrayOutputStream()
-        writePdf(context, bookState, outputStream)
+        writePdf(context, bookState, outputStream, memoryTimestamps)
         return outputStream.toByteArray()
     }
 
-    fun writePdf(context: Context, bookState: BookState, outputStream: OutputStream) {
+    fun writePdf(
+        context: Context,
+        bookState: BookState,
+        outputStream: OutputStream,
+        memoryTimestamps: Map<Long, Long> = emptyMap()
+    ) {
         val document = PdfDocument()
 
         try {
@@ -109,12 +118,14 @@ object PdfExportUtil {
                         renderImageSlot(context, canvas, rect, slot)
                     }
                 }
-                pageState.textElements.sortedBy { it.zIndex }.forEach { element ->
-                    renderText(canvas, element, typeface)
-                }
-
                 drawCropMarks(canvas, pageWidthPx, pageHeightPx)
-                drawPageNumber(canvas, pageState.pageNumber, pageWidthPx, pageHeightPx)
+                drawPageFooter(
+                    canvas = canvas,
+                    footer = PdfPageFooter.fromPage(pageState, memoryTimestamps),
+                    pageWidthPx = pageWidthPx,
+                    pageHeightPx = pageHeightPx,
+                    typeface = typeface
+                )
 
                 document.finishPage(page)
             }
@@ -309,23 +320,39 @@ object PdfExportUtil {
         )
     }
 
-    private fun drawPageNumber(
+    private fun drawPageFooter(
         canvas: Canvas,
-        pageNumber: Int,
+        footer: PdfPageFooter,
         pageWidthPx: Int,
-        pageHeightPx: Int
+        pageHeightPx: Int,
+        typeface: Typeface
     ) {
-        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 11f * DPI / 25.4f
+        val moodPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = mmToPxFloat(PdfPageFooter.TEXT_FONT_SIZE_MM)
+            color = PDF_TEXT_COLOR
+            textAlign = Paint.Align.LEFT
+            this.typeface = typeface
+        }
+        val secondaryPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = mmToPxFloat(PdfPageFooter.TEXT_FONT_SIZE_MM)
             color = PDF_GRAY_TEXT_COLOR
             textAlign = Paint.Align.RIGHT
-            typeface = Typeface.DEFAULT
+            this.typeface = typeface
         }
 
-        val text = "$pageNumber"
-        val x = pageWidthPx.toFloat() - mmToPxFloat(PAGE_NUMBER_MARGIN_MM)
-        val y = pageHeightPx.toFloat() - mmToPxFloat(PAGE_NUMBER_MARGIN_MM)
+        val baselineY = pageHeightPx.toFloat() - mmToPxFloat(PAGE_NUMBER_MARGIN_MM)
+        footer.moodText?.takeIf { it.isNotBlank() }?.let { moodText ->
+            canvas.drawText(moodText, pageWidthPx * 0.15f, baselineY, moodPaint)
+        }
+        footer.dateText?.let { dateText ->
+            canvas.drawText(dateText, pageWidthPx * 0.85f, baselineY, secondaryPaint)
+        }
 
-        canvas.drawText(text, x, y, paint)
+        canvas.drawText(
+            footer.pageNumberText,
+            pageWidthPx.toFloat() - mmToPxFloat(PAGE_NUMBER_MARGIN_MM),
+            baselineY,
+            secondaryPaint
+        )
     }
 }

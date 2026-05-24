@@ -18,11 +18,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -167,27 +165,6 @@ fun PhotoPickerScreen(
         }
     }
 
-    // Floating preview button (batch mode only)
-    if (selectedPhotos.isNotEmpty() && mode == MemoryPhotoPickerMode.BatchImport) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 24.dp),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            FloatingActionButton(
-                onClick = { /* Preview selected */ },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Visibility, contentDescription = null)
-                Text(
-                    "预览选中 (${selectedPhotos.size})",
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-            }
-        }
-    }
 }
 
 private fun SelectedMemoryPhoto.withResolvedImageDimensions(context: Context): SelectedMemoryPhoto {

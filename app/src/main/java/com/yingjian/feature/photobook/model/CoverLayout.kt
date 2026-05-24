@@ -70,19 +70,13 @@ object CoverLayoutDefaults {
         pageType = CoverPageType.Cover,
         backgroundColor = BACKGROUND,
         textElements = listOf(
-            CoverTextElement("cover-title", CoverTextRole.Title, title, 62.5f, 82f, 160f, 18f, 10f, 0f, PhotobookTextAlign.Center),
-            CoverTextElement("cover-divider", CoverTextRole.Divider, "", 117.5f, 105f, 50f, 1f, 1f, 0f, PhotobookTextAlign.Center),
-            CoverTextElement("cover-subtitle", CoverTextRole.Subtitle, subtitle, 72.5f, 112f, 140f, 12f, 5f, 0f, PhotobookTextAlign.Center)
+            CoverTextElement("cover-title", CoverTextRole.Title, title, 62.5f, 96f, 160f, 18f, 10f, 0f, PhotobookTextAlign.Center)
         )
     )
 
     fun defaultBackCover(title: String, subtitle: String, dateText: String): CoverLayout = CoverLayout(
         pageType = CoverPageType.BackCover,
         backgroundColor = BACKGROUND,
-        textElements = listOf(
-            CoverTextElement("back-title", CoverTextRole.Title, title, 72.5f, 84f, 140f, 14f, 8f, 0f, PhotobookTextAlign.Center),
-            CoverTextElement("back-subtitle", CoverTextRole.Subtitle, subtitle, 72.5f, 103f, 140f, 10f, 5f, 0f, PhotobookTextAlign.Center),
-            CoverTextElement("back-date", CoverTextRole.Date, dateText, 92.5f, 118f, 100f, 8f, 4f, 0f, PhotobookTextAlign.Center)
-        )
+        textElements = emptyList()
     )
 }

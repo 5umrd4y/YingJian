@@ -94,7 +94,7 @@ fun PhotobookEditorScreen(
     onMoveSelectedToNextPage: () -> Unit = {},
     onMoveSelectedToNewPage: () -> Unit = {},
     onSwapSelectedWithSlot: (String) -> Unit = {},
-    onFillSelectedSlot: () -> Unit = {},
+    onFillSelectedSlot: (BookState, Int, String) -> Unit = { _, _, _ -> },
     onDeleteSelectedSlotImage: () -> Unit = {},
     onResetSelectedSlotImage: () -> Unit = {},
     pageMoodText: String? = null,
@@ -329,8 +329,13 @@ fun PhotobookEditorScreen(
                                         onEmptySlotAddClicked = { slotId ->
                                             val updatedPages = bookState.pages.toMutableList()
                                             updatedPages[cp] = currentPageState
-                                            onUpdateState(bookState.copy(pages = updatedPages, selectedSlotId = slotId, currentPage = cp))
-                                            onFillSelectedSlot()
+                                            val pendingFillState = bookState.copy(
+                                                pages = updatedPages,
+                                                selectedSlotId = slotId,
+                                                currentPage = cp
+                                            )
+                                            onUpdateState(pendingFillState)
+                                            onFillSelectedSlot(pendingFillState, cp, slotId)
                                         },
                                         onSlotImageAdjusted = { slotId, offsetXMm, offsetYMm, scale ->
                                             val updatedPages = bookState.pages.toMutableList()

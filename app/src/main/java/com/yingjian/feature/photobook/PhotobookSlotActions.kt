@@ -60,6 +60,18 @@ object PhotobookSlotActions {
         return page.copy(template = nextTemplate, slots = activeSlots + inactiveSlots)
     }
 
+    fun fillSlotInPage(
+        pages: List<PageState>,
+        pageIndex: Int,
+        slotId: String,
+        imageRef: ImageRef
+    ): List<PageState> {
+        val page = pages.getOrNull(pageIndex) ?: return pages
+        return pages.toMutableList().also { updatedPages ->
+            updatedPages[pageIndex] = fillSlot(page, slotId, imageRef)
+        }
+    }
+
     fun clearSlot(page: PageState, slotId: String): PageState = page.copy(
         slots = page.slots.map { slot ->
             if (slot.slotId == slotId) slot.copy(imageRef = null, cropScale = 1f, cropOffsetX = 0f, cropOffsetY = 0f) else slot

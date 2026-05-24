@@ -428,48 +428,62 @@ fun YingJianNavHost(
             val context = LocalContext.current
 
             var loadedBookState by remember { mutableStateOf<BookState?>(null) }
+            fun setEditorBookState(state: BookState?) {
+                loadedBookState = state
+                if (state != null) {
+                    viewModel.updateBookState(state)
+                }
+            }
 
             LaunchedEffect(photobookId) {
                 if (photobookId != null) {
-                    val photobook = withContext(Dispatchers.IO) {
-                        deps.photobookRepository.getPhotobookById(photobookId)
-                    }
-                    if (photobook != null) {
-                        val pageLayouts = withContext(Dispatchers.IO) {
-                            deps.photobookRepository.getPageLayouts(photobookId)
+                    val retainedState = viewModel.uiState.currentBookState
+                        ?.takeIf { it.photobook.id == photobookId }
+                    if (retainedState != null) {
+                        loadedBookState = retainedState
+                    } else {
+                        val photobook = withContext(Dispatchers.IO) {
+                            deps.photobookRepository.getPhotobookById(photobookId)
                         }
-                        val pages = pageLayouts.map { layout ->
-                            val document = PageLayoutDocumentSerializer.deserialize(layout.elementsJson)
-                            PageState(
-                                pageNumber = layout.pageNumber,
-                                template = document.template,
-                                slots = document.slots,
-                                textElements = document.textElements,
-                                trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
-                                trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
+                        if (photobook != null) {
+                            val pageLayouts = withContext(Dispatchers.IO) {
+                                deps.photobookRepository.getPageLayouts(photobookId)
+                            }
+                            val pages = pageLayouts.map { layout ->
+                                val document = PageLayoutDocumentSerializer.deserialize(layout.elementsJson)
+                                PageState(
+                                    pageNumber = layout.pageNumber,
+                                    template = document.template,
+                                    slots = document.slots,
+                                    textElements = document.textElements,
+                                    trimWidthMm = PaperSize.valueOf(photobook.paperSize).widthMm,
+                                    trimHeightMm = PaperSize.valueOf(photobook.paperSize).heightMm
+                                )
+                            }
+                            val coverLayout = photobook.coverLayoutJson
+                                ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
+                                ?: CoverLayoutDefaults.defaultCover(
+                                    title = photobook.coverTitle ?: photobook.name,
+                                    subtitle = photobook.coverSubtitle ?: ""
+                                )
+                            val backCoverLayout = photobook.backCoverLayoutJson
+                                ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
+                                ?: CoverLayoutDefaults.defaultBackCover(
+                                    title = photobook.backTitle ?: photobook.name,
+                                    subtitle = photobook.backSubtitle ?: "",
+                                    dateText = photobook.backDateText ?: ""
+                                )
+                            val loadedState = BookState(
+                                photobook = photobook,
+                                pages = pages,
+                                currentPage = 0,
+                                mode = LayoutMode.MANUAL,
+                                coverLayout = coverLayout,
+                                backCoverLayout = backCoverLayout
                             )
+                            loadedBookState = loadedState
+                            viewModel.updateBookState(loadedState)
                         }
-                        val coverLayout = photobook.coverLayoutJson
-                            ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
-                            ?: CoverLayoutDefaults.defaultCover(
-                                title = photobook.coverTitle ?: photobook.name,
-                                subtitle = photobook.coverSubtitle ?: ""
-                            )
-                        val backCoverLayout = photobook.backCoverLayoutJson
-                            ?.let { runCatching { CoverLayoutSerializer.deserialize(it) }.getOrNull() }
-                            ?: CoverLayoutDefaults.defaultBackCover(
-                                title = photobook.backTitle ?: photobook.name,
-                                subtitle = photobook.backSubtitle ?: "",
-                                dateText = photobook.backDateText ?: ""
-                            )
-                        loadedBookState = BookState(
-                            photobook = photobook,
-                            pages = pages,
-                            currentPage = 0,
-                            mode = LayoutMode.MANUAL,
-                            coverLayout = coverLayout,
-                            backCoverLayout = backCoverLayout
-                        )
                     }
                 }
             }
@@ -490,8 +504,17 @@ fun YingJianNavHost(
                 coroutineScope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) {
+                            val memoryTimestamps = loadPdfMemoryTimestamps(
+                                exportState,
+                                deps.memoryRepository
+                            )
                             context.contentResolver.openOutputStream(uri)?.use { stream ->
-                                PdfExportUtil.writePdf(context, exportState, stream)
+                                PdfExportUtil.writePdf(
+                                    context,
+                                    exportState,
+                                    stream,
+                                    memoryTimestamps
+                                )
                             } ?: error("Unable to open PDF output stream")
                         }
                     }.onSuccess {
@@ -533,8 +556,14 @@ fun YingJianNavHost(
                         if (fillSlotResultStr != null) {
                             val photos = SelectedMemoryPhotoCodec.decode(fillSlotResultStr)
                             val savedFillState = fillSlotState
+                                ?: viewModel.uiState.currentBookState
+                                    ?.takeIf { it.photobook.id == photobookId }
+                                ?: loadedBookState
                             val targetSlotId = fillSlotTargetSlotId
-                            if (savedFillState != null && targetSlotId != null && photos.isNotEmpty()) {
+                                ?: backStackEntry.savedStateHandle.get<String>("pendingFillSlotId")
+                            val targetPageIndex = backStackEntry.savedStateHandle.get<Int>("pendingFillPageIndex")
+                                ?: savedFillState?.currentPage
+                            if (savedFillState != null && targetSlotId != null && targetPageIndex != null && photos.isNotEmpty()) {
                                 val photo = photos.first()
                                 val imageRef = com.yingjian.feature.photobook.model.ImageRef(
                                     memoryId = photo.memoryId,
@@ -544,16 +573,23 @@ fun YingJianNavHost(
                                     imageWidth = photo.imageWidth,
                                     imageHeight = photo.imageHeight
                                 )
-                                val cp = savedFillState.currentPage
-                                val page = savedFillState.pages.getOrNull(cp)
-                                if (page != null) {
-                                    val updatedPages = savedFillState.pages.toMutableList()
-                                    updatedPages[cp] = PhotobookSlotActions.fillSlot(page, targetSlotId, imageRef)
-                                    loadedBookState = savedFillState.copy(pages = updatedPages, selectedSlotId = null)
-                                }
+                                val updatedPages = PhotobookSlotActions.fillSlotInPage(
+                                    pages = savedFillState.pages,
+                                    pageIndex = targetPageIndex,
+                                    slotId = targetSlotId,
+                                    imageRef = imageRef
+                                )
+                                val updatedState = savedFillState.copy(
+                                    pages = updatedPages,
+                                    currentPage = targetPageIndex,
+                                    selectedSlotId = null
+                                )
+                                setEditorBookState(updatedState)
                             }
                             fillSlotState = null
                             fillSlotTargetSlotId = null
+                            backStackEntry.savedStateHandle.remove<Int>("pendingFillPageIndex")
+                            backStackEntry.savedStateHandle.remove<String>("pendingFillSlotId")
                             backStackEntry.savedStateHandle.remove<String>("fillSlotResult")
                         }
                     }
@@ -565,11 +601,11 @@ fun YingJianNavHost(
                             val appendPhotos = SelectedMemoryPhotoCodec.decode(appendPhotosStr)
                             if (appendPhotos.isNotEmpty()) {
                                 // Sync loadedBookState into ViewModel so appendPhotosToBook can access it
-                                loadedBookState?.let { viewModel.updateBookState(it) }
+                                loadedBookState?.let { setEditorBookState(it) }
                                 viewModel.appendPhotosToBook(appendPhotos)
                                 val vmState = viewModel.uiState.currentBookState
                                 if (vmState != null && vmState.photobook.id == photobookId) {
-                                    loadedBookState = vmState
+                                    setEditorBookState(vmState)
                                 }
                             }
                             backStackEntry.savedStateHandle.remove<String>("appendMemoryPhotos")
@@ -581,7 +617,7 @@ fun YingJianNavHost(
                     LaunchedEffect(vmCurrentState?.pages?.size, vmCurrentState?.photobook?.id) {
                         if (vmCurrentState != null && vmCurrentState.photobook.id == photobookId
                             && vmCurrentState.pages.size != loadedBookState?.pages?.size) {
-                            loadedBookState = vmCurrentState
+                            setEditorBookState(vmCurrentState)
                         }
                     }
 
@@ -597,11 +633,11 @@ fun YingJianNavHost(
                                 val pages = state.pages.toMutableList()
                                 pages[sourceIndex] = result.sourcePage
                                 pages[targetPageIndex] = result.targetPage
-                                loadedBookState = state.copy(pages = pages, currentPage = targetPageIndex, selectedSlotId = null)
+                                setEditorBookState(state.copy(pages = pages, currentPage = targetPageIndex, selectedSlotId = null))
                             }
                             MoveResult.SourceEmpty -> Unit
                             MoveResult.TargetFull -> {
-                                loadedBookState = state
+                                setEditorBookState(state)
                                 coroutineScope.launch {
                                     editorSnackbarHostState.showSnackbar("目标页面已满，无法移动")
                                 }
@@ -611,12 +647,12 @@ fun YingJianNavHost(
 
                     PhotobookEditorScreen(
                         bookState = theBookState,
-                    onUpdateState = { loadedBookState = it },
+                    onUpdateState = { setEditorBookState(it) },
                     onUpdatePhotobook = { updatedPhotobook ->
-                        loadedBookState = loadedBookState?.copy(photobook = updatedPhotobook.copy(updatedAt = System.currentTimeMillis()))
+                        setEditorBookState(loadedBookState?.copy(photobook = updatedPhotobook.copy(updatedAt = System.currentTimeMillis())))
                     },
                     onContentPageSelected = { pageIndex ->
-                        loadedBookState = loadedBookState?.copy(currentPage = pageIndex)
+                        setEditorBookState(loadedBookState?.copy(currentPage = pageIndex))
                     },
                     onBack = { navController.popBackStack() },
                     onSave = {
@@ -675,7 +711,7 @@ fun YingJianNavHost(
                                 coverImageUri = it.imageUri,
                                 updatedAt = System.currentTimeMillis()
                             )
-                            loadedBookState = loadedBookState?.copy(photobook = updatedPhotobook)
+                            setEditorBookState(loadedBookState?.copy(photobook = updatedPhotobook))
                             // Persist cover to DB immediately
                             coroutineScope.launch {
                                 withContext(Dispatchers.IO) {
@@ -692,7 +728,8 @@ fun YingJianNavHost(
                             is TemplateChangeResult.Changed -> {
                                 val updatedPages = state.pages.toMutableList()
                                 updatedPages[pageIndex] = result.page
-                                loadedBookState = state.copy(pages = updatedPages)
+                                val updatedState = state.copy(pages = updatedPages)
+                                setEditorBookState(updatedState)
                             }
                             is TemplateChangeResult.Overflow -> {
                                 coroutineScope.launch {
@@ -712,7 +749,7 @@ fun YingJianNavHost(
                                 if (slot.slotId == selectedSlotId) slot.copy(imageRef = null, cropScale = 1f, cropOffsetX = 0f, cropOffsetY = 0f) else slot
                             }
                         )
-                        loadedBookState = state.copy(pages = updatedPages, selectedSlotId = null)
+                        setEditorBookState(state.copy(pages = updatedPages, selectedSlotId = null))
                     },
                     onResetSelectedSlotImage = {
                         val state = loadedBookState ?: return@PhotobookEditorScreen
@@ -734,7 +771,7 @@ fun YingJianNavHost(
                             slots = resetPage.slots.map { s -> if (s.slotId == selectedSlotId) s.copy(slotId = selectedSlotId) else s },
                             template = page.template
                         )
-                        loadedBookState = state.copy(pages = updatedPages, selectedSlotId = null)
+                        setEditorBookState(state.copy(pages = updatedPages, selectedSlotId = null))
                     },
                     onMoveSelectedToPreviousPage = {
                         val state = loadedBookState ?: return@PhotobookEditorScreen
@@ -765,13 +802,15 @@ fun YingJianNavHost(
                         )
                         val pages = state.pages.toMutableList()
                         pages[pageIndex] = clearedPage
-                        loadedBookState = state.copy(pages = pages + newPage, currentPage = pages.size, selectedSlotId = "slot-1")
+                        setEditorBookState(state.copy(pages = pages + newPage, currentPage = pages.size, selectedSlotId = "slot-1"))
                     },
-                    onFillSelectedSlot = {
-                        val state = loadedBookState ?: return@PhotobookEditorScreen
-                        val selectedSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
-                        fillSlotState = state
-                        fillSlotTargetSlotId = selectedSlotId
+                    onFillSelectedSlot = { pendingState, pageIndex, slotId ->
+                        val state = pendingState.copy(currentPage = pageIndex, selectedSlotId = slotId)
+                        setEditorBookState(state)
+                        fillSlotState = state.copy(currentPage = pageIndex, selectedSlotId = slotId)
+                        fillSlotTargetSlotId = slotId
+                        backStackEntry.savedStateHandle["pendingFillPageIndex"] = pageIndex
+                        backStackEntry.savedStateHandle["pendingFillSlotId"] = slotId
                         navController.navigate(NavDestinations.PhotoPicker.createRoute(mode = "fillSlot"))
                     },
                     onSwapSelectedWithSlot = { targetSlotId ->
@@ -782,7 +821,7 @@ fun YingJianNavHost(
                         if (srcSlotId == targetSlotId) return@PhotobookEditorScreen
                         val updatedPages = state.pages.toMutableList()
                         updatedPages[cp] = PhotobookSlotActions.swapSlots(page, srcSlotId, targetSlotId)
-                        loadedBookState = state.copy(pages = updatedPages, selectedSlotId = null)
+                        setEditorBookState(state.copy(pages = updatedPages, selectedSlotId = null))
                     },
                     onTextAction = {
                         // For now, no-op — text editing UI will be added in a follow-up task
@@ -798,16 +837,16 @@ fun YingJianNavHost(
                             currentPageIndex = state.currentPage,
                             newPage = newPage
                         )
-                        loadedBookState = state.copy(pages = updatedPages, currentPage = state.currentPage + 1, selectedSlotId = "slot-1")
+                        setEditorBookState(state.copy(pages = updatedPages, currentPage = state.currentPage + 1, selectedSlotId = "slot-1"))
                     },
                     onSelectLeaf = { leafIndex ->
                         // No-op: navigation is driven by editor's local state
                     },
                     onUpdateCoverLayout = { newCoverLayout ->
-                        loadedBookState = loadedBookState?.copy(coverLayout = newCoverLayout)
+                        setEditorBookState(loadedBookState?.copy(coverLayout = newCoverLayout))
                     },
                     onUpdateBackCoverLayout = { newBackCoverLayout ->
-                        loadedBookState = loadedBookState?.copy(backCoverLayout = newBackCoverLayout)
+                        setEditorBookState(loadedBookState?.copy(backCoverLayout = newBackCoverLayout))
                     },
                     snackbarHostState = editorSnackbarHostState,
                     isExportingPdf = isExportingPdf,
@@ -879,10 +918,19 @@ fun YingJianNavHost(
                         previewCoroutineScope.launch {
                             runCatching {
                                 val shareFile = withContext(Dispatchers.IO) {
+                                    val memoryTimestamps = loadPdfMemoryTimestamps(
+                                        state,
+                                        deps.memoryRepository
+                                    )
                                     val cacheDir = context.cacheDir
                                     java.io.File(cacheDir, "photobook_${state.photobook.id}.pdf").also { file ->
                                         file.outputStream().use { stream ->
-                                            PdfExportUtil.writePdf(context, state, stream)
+                                            PdfExportUtil.writePdf(
+                                                context,
+                                                state,
+                                                stream,
+                                                memoryTimestamps
+                                            )
                                         }
                                     }
                                 }
@@ -906,6 +954,18 @@ fun YingJianNavHost(
             }
         }
     }
+}
+
+private suspend fun loadPdfMemoryTimestamps(
+    bookState: BookState,
+    memoryRepository: com.yingjian.core.data.repository.MemoryRepository
+): Map<Long, Long> {
+    val memoryIds = bookState.pages
+        .flatMap { page -> page.slots.mapNotNull { slot -> slot.imageRef?.memoryId } }
+        .distinct()
+    if (memoryIds.isEmpty()) return emptyMap()
+    return memoryRepository.getMemoriesByIds(memoryIds)
+        .associate { memory -> memory.id to memory.timestamp }
 }
 
 @Composable

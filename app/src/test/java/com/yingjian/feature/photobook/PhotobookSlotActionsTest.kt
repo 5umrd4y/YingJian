@@ -84,6 +84,24 @@ class PhotobookSlotActionsTest {
     }
 
     @Test
+    fun `fill slot in pages updates requested page instead of first page`() {
+        val pages = listOf(
+            page(PageTemplate.GridFour, listOf(empty("slot-1"), empty("slot-2"), empty("slot-3"), empty("slot-4")), pageNumber = 1),
+            page(PageTemplate.GridFour, listOf(empty("slot-1"), empty("slot-2"), empty("slot-3"), empty("slot-4")), pageNumber = 2)
+        )
+
+        val updated = PhotobookSlotActions.fillSlotInPage(
+            pages = pages,
+            pageIndex = 1,
+            slotId = "slot-2",
+            imageRef = ImageRef(9, "content://image/9", 0)
+        )
+
+        assertNull(updated[0].slots.first { it.slotId == "slot-2" }.imageRef)
+        assertEquals("content://image/9", updated[1].slots.first { it.slotId == "slot-2" }.imageRef?.imageUri)
+    }
+
+    @Test
     fun `fill single slot switches to portrait template for portrait image`() {
         val page = page(PageTemplate.SingleLandscape, listOf(empty("slot-1")))
 

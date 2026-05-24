@@ -1,6 +1,7 @@
 package com.yingjian.feature.photobook.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,7 +12,11 @@ class CoverLayoutTest {
 
         assertEquals(CoverPageType.Cover, layout.pageType)
         assertEquals("#AAA194", layout.backgroundColor)
-        assertTrue(layout.textElements.any { it.id == "cover-title" && it.role == CoverTextRole.Title })
+        assertEquals(listOf(CoverTextRole.Title), layout.textElements.map { it.role })
+        val title = layout.textElements.single()
+        assertEquals("My Book", title.text)
+        assertEquals(142.5f, title.xMm + title.widthMm / 2f, 0.001f)
+        assertEquals(105f, title.yMm + title.heightMm / 2f, 0.001f)
         layout.textElements.forEach { element ->
             assertTrue(element.xMm >= 0f)
             assertTrue(element.yMm >= 0f)
@@ -34,6 +39,19 @@ class CoverLayoutTest {
         val updated = layout.updateText("cover-title", "New")
 
         assertEquals("New", updated.textElements.first { it.id == "cover-title" }.text)
-        assertEquals("Sub", updated.textElements.first { it.id == "cover-subtitle" }.text)
+    }
+
+    @Test
+    fun `default back cover is blank`() {
+        val layout = CoverLayoutDefaults.defaultBackCover(
+            title = "Back",
+            subtitle = "Subtitle",
+            dateText = "2026.05.16"
+        )
+
+        assertEquals(CoverPageType.BackCover, layout.pageType)
+        assertEquals("#AAA194", layout.backgroundColor)
+        assertTrue(layout.textElements.isEmpty())
+        assertFalse(layout.textElements.any { it.role == CoverTextRole.Divider })
     }
 }
