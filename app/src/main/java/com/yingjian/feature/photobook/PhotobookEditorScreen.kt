@@ -10,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -114,7 +116,8 @@ fun PhotobookEditorScreen(
     var editingTextPageType by remember { mutableStateOf<CoverPageType?>(null) }
     var editingTextId by remember { mutableStateOf<String?>(null) }
     var editingTextValue by remember { mutableStateOf("") }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val internalSnackbarHostState = remember { SnackbarHostState() }
+    val activeSnackbarHostState = snackbarHostState ?: internalSnackbarHostState
     val coroutineScope = rememberCoroutineScope()
 
     val isCoverLeaf = currentLeafIndex == 0
@@ -160,7 +163,7 @@ fun PhotobookEditorScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState ?: SnackbarHostState()) },
+        snackbarHost = { SnackbarHost(activeSnackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -205,7 +208,7 @@ fun PhotobookEditorScreen(
                     IconButton(onClick = {
                         onSave()
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("已保存")
+                            activeSnackbarHostState.showSnackbar("已保存")
                         }
                     }) {
                         Icon(Icons.Default.Save, contentDescription = "保存")
@@ -358,7 +361,7 @@ fun PhotobookEditorScreen(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -368,31 +371,36 @@ fun PhotobookEditorScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一页")
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
                 ) {
-                    repeat(leafCount) { index ->
-                        val dotType = when (index) {
-                            0 -> LeafType.Cover
-                            leafCount - 1 -> LeafType.BackCover
-                            else -> LeafType.Content
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
+                        repeat(leafCount) { index ->
+                            val dotType = when (index) {
+                                0 -> LeafType.Cover
+                                leafCount - 1 -> LeafType.BackCover
+                                else -> LeafType.Content
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(
+                                        width = if (index == currentLeafIndex) 16.dp else 6.dp,
+                                        height = 6.dp
+                                    )
+                                    .background(
+                                        if (index == currentLeafIndex) MaterialTheme.colorScheme.primary
+                                        else when (dotType) {
+                                            LeafType.Cover, LeafType.BackCover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            LeafType.Content -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        },
+                                        CircleShape
+                                    )
+                            )
                         }
-                        Box(
-                            modifier = Modifier
-                                .size(
-                                    width = if (index == currentLeafIndex) 16.dp else 6.dp,
-                                    height = 6.dp
-                                )
-                                .background(
-                                    if (index == currentLeafIndex) MaterialTheme.colorScheme.primary
-                                    else when (dotType) {
-                                        LeafType.Cover, LeafType.BackCover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                        LeafType.Content -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                    },
-                                    CircleShape
-                                )
-                        )
                     }
                 }
 

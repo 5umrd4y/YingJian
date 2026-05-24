@@ -37,6 +37,7 @@ import com.yingjian.feature.photobook.PhotobookSlotActions
 import com.yingjian.feature.photobook.TemplateChangeResult
 import com.yingjian.feature.photobook.SelectedMemoryPhotoCodec
 import com.yingjian.feature.photobook.MemoryPhotoPickerMode
+import com.yingjian.feature.photobook.export.PdfExportFileName
 import com.yingjian.feature.photobook.export.PdfExportUtil
 import com.yingjian.feature.photobook.layout.AutoLayoutAlgorithm
 import com.yingjian.feature.photobook.model.BookState
@@ -73,6 +74,14 @@ fun YingJianNavHost(
     var memoryRefreshTrigger by remember { mutableStateOf(0) }
     var pendingPublish by remember { mutableStateOf<MemoryRecordEntity?>(null) }
     val navHostScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            deps.imageArchiveMigration.migrateReadableImages()
+        }
+        refreshTrigger++
+        memoryRefreshTrigger++
+    }
 
     // Handle publish via LaunchedEffect (not runBlocking)
     LaunchedEffect(pendingPublish) {
@@ -180,7 +189,7 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
-            val (uris, imageUrisJson, dates) = remember {
+            val (uris, _, dates) = remember {
                 val urisJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostUris")
                 val datesJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostDates")
 
@@ -208,19 +217,27 @@ fun YingJianNavHost(
                 NewPostScreen(
                     imageUris = uris,
                     datesTaken = dates,
-                    onPublish = { mood, tags ->
-                        pendingPublish = MemoryRecordEntity(
-                            imageUri = uris.first().toString(),
-                            imageWidth = firstMetadata.first,
-                            imageHeight = firstMetadata.second,
-                            timestamp = dates.first(),
-                            latitude = null,
-                            longitude = null,
-                            moodText = mood.takeIf { it.isNotBlank() },
-                            tags = Json.encodeToString(ListSerializer(String.serializer()), tags),
-                            createdAt = System.currentTimeMillis(),
-                            imageUrisJson = imageUrisJson
-                        )
+                    onPublish = { mood, tags, currentUris, currentDates ->
+                        navHostScope.launch {
+                            val archivedUriStrings = withContext(Dispatchers.IO) {
+                                deps.imageArchiveRepository.archiveUris(currentUris)
+                            }
+                            pendingPublish = MemoryRecordEntity(
+                                imageUri = archivedUriStrings.first(),
+                                imageWidth = firstMetadata.first,
+                                imageHeight = firstMetadata.second,
+                                timestamp = currentDates.firstOrNull() ?: dates.first(),
+                                latitude = null,
+                                longitude = null,
+                                moodText = mood.takeIf { it.isNotBlank() },
+                                tags = Json.encodeToString(ListSerializer(String.serializer()), tags),
+                                createdAt = System.currentTimeMillis(),
+                                imageUrisJson = Json.encodeToString(
+                                    ListSerializer(String.serializer()),
+                                    archivedUriStrings
+                                )
+                            )
+                        }
                     },
                     onBack = { navController.popBackStack() }
                 )
@@ -253,19 +270,22 @@ fun YingJianNavHost(
                                 )
                             }
                         }
-                        val existing = memory?.let { m -> m.getAllImageUris().map { Uri.parse(it) } } ?: emptyList()
-                        val allUris = existing + pickedUris
-                        val imageUrisJson = Json.encodeToString(
-                            ListSerializer(String.serializer()),
-                            allUris.map { it.toString() }
-                        )
                         navHostScope.launch {
+                            val archivedPickedUris = withContext(Dispatchers.IO) {
+                                deps.imageArchiveRepository.archiveUris(pickedUris)
+                            }
+                            val existing = memory?.let { m -> m.getAllImageUris() } ?: emptyList()
+                            val allUriStrings = existing + archivedPickedUris
+                            val imageUrisJson = Json.encodeToString(
+                                ListSerializer(String.serializer()),
+                                allUriStrings
+                            )
                             withContext(Dispatchers.IO) {
                                 memory?.let { m ->
                                     deps.memoryRepository.updateMemory(
                                         m.copy(
                                             imageUrisJson = imageUrisJson,
-                                            imageUri = allUris.first().toString()
+                                            imageUri = allUriStrings.first()
                                         )
                                     )
                                 }
@@ -286,19 +306,22 @@ fun YingJianNavHost(
                                 Intent.FLAG_GRANT_READ_URI_PERMISSION
                             )
                         }
-                        val existing = memory?.let { m -> m.getAllImageUris().map { Uri.parse(it) } } ?: emptyList()
-                        val allUris = existing + pickedUri
-                        val imageUrisJson = Json.encodeToString(
-                            ListSerializer(String.serializer()),
-                            allUris.map { it.toString() }
-                        )
                         navHostScope.launch {
+                            val archivedPickedUri = withContext(Dispatchers.IO) {
+                                deps.imageArchiveRepository.archiveUri(pickedUri)
+                            }
+                            val existing = memory?.let { m -> m.getAllImageUris() } ?: emptyList()
+                            val allUriStrings = existing + archivedPickedUri
+                            val imageUrisJson = Json.encodeToString(
+                                ListSerializer(String.serializer()),
+                                allUriStrings
+                            )
                             withContext(Dispatchers.IO) {
                                 memory?.let { m ->
                                     deps.memoryRepository.updateMemory(
                                         m.copy(
                                             imageUrisJson = imageUrisJson,
-                                            imageUri = allUris.first().toString()
+                                            imageUri = allUriStrings.first()
                                         )
                                     )
                                 }
@@ -472,7 +495,7 @@ fun YingJianNavHost(
                             } ?: error("Unable to open PDF output stream")
                         }
                     }.onSuccess {
-                        editorSnackbarHostState.showSnackbar("PDF已导出")
+                        editorSnackbarHostState.showSnackbar("画册导出成功")
                     }.onFailure {
                         editorSnackbarHostState.showSnackbar("导出失败，请重试")
                     }
@@ -628,7 +651,7 @@ fun YingJianNavHost(
                         isExportingPdf = true
                         pendingPdfExportState = theBookState
                         runCatching {
-                            createPdf.launch("photobook.pdf")
+                            createPdf.launch(PdfExportFileName.defaultFileName(theBookState.photobook.name))
                         }.onFailure {
                             pendingPdfExportState = null
                             isExportingPdf = false

@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 private val VERSION_HISTORY = listOf(
+    VersionEntry("1.0.4", "2026-05-24", "修复导入图片长期失效问题，优化画册翻页指示器与PDF导出成功提示"),
     VersionEntry("1.0.3", "2026-05-16", "画册编辑、预览与PDF导出体验优化：支持封面封底、版式调整、图片位置缩放、横竖图自动排版与存储设置分级"),
     VersionEntry("1.0.2", "2026-05-13", "画册模块全面升级：285x210横版纸质封面、选择删除、手势编辑、翻页预览"),
     VersionEntry("1.0.1", "2026-05-12", "优化标签添加按钮和输入框布局对齐"),

@@ -9,6 +9,8 @@ import com.yingjian.core.data.repository.MemoryRepositoryImpl
 import com.yingjian.core.data.repository.PhotobookRepository
 import com.yingjian.core.data.repository.PhotobookRepositoryImpl
 import com.yingjian.core.data.repository.StorageProvider
+import com.yingjian.core.media.ImageArchiveMigration
+import com.yingjian.core.media.ImageArchiveRepository
 
 class AppDependencies(context: Context) {
     private val database: YingJianDatabase = Room.databaseBuilder(
@@ -30,5 +32,17 @@ class AppDependencies(context: Context) {
 
     val localStorageProvider: StorageProvider by lazy {
         LocalStorageProvider(context.applicationContext)
+    }
+
+    val imageArchiveRepository: ImageArchiveRepository by lazy {
+        ImageArchiveRepository(context.applicationContext)
+    }
+
+    val imageArchiveMigration: ImageArchiveMigration by lazy {
+        ImageArchiveMigration(
+            memoryRepository = memoryRepository,
+            photobookRepository = photobookRepository,
+            imageArchiveRepository = imageArchiveRepository
+        )
     }
 }

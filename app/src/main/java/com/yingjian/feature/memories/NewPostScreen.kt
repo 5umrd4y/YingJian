@@ -66,7 +66,7 @@ import java.util.Locale
 fun NewPostScreen(
     imageUris: List<Uri>,
     datesTaken: List<Long>,
-    onPublish: (String, List<String>) -> Unit,
+    onPublish: (String, List<String>, List<Uri>, List<Long>) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -124,7 +124,7 @@ fun NewPostScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onPublish(moodText, tags.toList()) }) {
+                    IconButton(onClick = { onPublish(moodText, tags.toList(), uris.toList(), dates.toList()) }) {
                         Icon(Icons.Default.Check, contentDescription = "发布")
                     }
                 }

@@ -2,6 +2,7 @@ package com.yingjian.feature.photobook
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -143,8 +145,10 @@ private fun PortraitSinglePageView(leaves: List<PhotobookLeaf>) {
 
         // Page indicator + nav buttons
         Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val coroutineScope = rememberCoroutineScope()
@@ -158,28 +162,36 @@ private fun PortraitSinglePageView(leaves: List<PhotobookLeaf>) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Previous", tint = Color.White.copy(alpha = 0.6f))
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                repeat(leaves.size) { index ->
-                    val dotType = when (leaves[index]) {
-                        is PhotobookLeaf.Cover -> LeafPreviewType.Cover
-                        is PhotobookLeaf.BackCover -> LeafPreviewType.BackCover
-                        is PhotobookLeaf.Content -> LeafPreviewType.Content
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                ) {
+                    repeat(leaves.size) { index ->
+                        val dotType = when (leaves[index]) {
+                            is PhotobookLeaf.Cover -> LeafPreviewType.Cover
+                            is PhotobookLeaf.BackCover -> LeafPreviewType.BackCover
+                            is PhotobookLeaf.Content -> LeafPreviewType.Content
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(
+                                    width = if (index == pagerState.currentPage) 16.dp else 6.dp,
+                                    height = 6.dp
+                                )
+                                .background(
+                                    if (index == pagerState.currentPage) Color.White
+                                    else when (dotType) {
+                                        LeafPreviewType.Cover, LeafPreviewType.BackCover -> Color.White.copy(alpha = 0.6f)
+                                        LeafPreviewType.Content -> Color.White.copy(alpha = 0.3f)
+                                    },
+                                    CircleShape
+                                )
+                        )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(
-                                width = if (index == pagerState.currentPage) 16.dp else 6.dp,
-                                height = 6.dp
-                            )
-                            .background(
-                                if (index == pagerState.currentPage) Color.White
-                                else when (dotType) {
-                                    LeafPreviewType.Cover, LeafPreviewType.BackCover -> Color.White.copy(alpha = 0.6f)
-                                    LeafPreviewType.Content -> Color.White.copy(alpha = 0.3f)
-                                },
-                                CircleShape
-                            )
-                    )
                 }
             }
 
@@ -292,8 +304,10 @@ private fun LandscapeSpreadView(leaves: List<PhotobookLeaf>) {
 
         // Spread indicator with nav buttons
         Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val coroutineScope = rememberCoroutineScope()
@@ -307,20 +321,28 @@ private fun LandscapeSpreadView(leaves: List<PhotobookLeaf>) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Previous", tint = Color.White.copy(alpha = 0.6f))
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                repeat(spreadCount) { index ->
-                    Box(
-                        modifier = Modifier
-                            .size(
-                                width = if (index == pagerState.currentPage) 16.dp else 6.dp,
-                                height = 6.dp
-                            )
-                            .background(
-                                if (index == pagerState.currentPage) Color.White
-                                else Color.White.copy(alpha = 0.3f),
-                                CircleShape
-                            )
-                    )
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                ) {
+                    repeat(spreadCount) { index ->
+                        Box(
+                            modifier = Modifier
+                                .size(
+                                    width = if (index == pagerState.currentPage) 16.dp else 6.dp,
+                                    height = 6.dp
+                                )
+                                .background(
+                                    if (index == pagerState.currentPage) Color.White
+                                    else Color.White.copy(alpha = 0.3f),
+                                    CircleShape
+                                )
+                        )
+                    }
                 }
             }
 
