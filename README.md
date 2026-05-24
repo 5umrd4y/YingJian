@@ -19,14 +19,13 @@ YingJian（影笺）是一个极简的 Android 照片日记与画册应用。它
 ## Screenshots
 
 <p>
-  <img src="assets/screenshots/Yingjian00.png" alt="YingJian screenshot 00" width="220">
   <img src="assets/screenshots/Yingjian01.png" alt="YingJian screenshot 01" width="220">
   <img src="assets/screenshots/Yingjian02.png" alt="YingJian screenshot 02" width="220">
   <img src="assets/screenshots/Yingjian03.png" alt="YingJian screenshot 03" width="220">
   <img src="assets/screenshots/Yingjian04.png" alt="YingJian screenshot 04" width="220">
   <img src="assets/screenshots/Yingjian05.png" alt="YingJian screenshot 05" width="220">
-  <img src="assets/screenshots/Yingjian06.png" alt="YingJian screenshot 06" width="440">
   <img src="assets/screenshots/Yingjian07.png" alt="YingJian screenshot 07" width="220">
+  <img src="assets/screenshots/Yingjian06.png" alt="YingJian screenshot 06" width="440">
 </p>
 
 ## Tech Stack
