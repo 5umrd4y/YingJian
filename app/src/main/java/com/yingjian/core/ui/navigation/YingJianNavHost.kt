@@ -751,6 +751,21 @@ fun YingJianNavHost(
                         )
                         setEditorBookState(state.copy(pages = updatedPages, selectedSlotId = null))
                     },
+                    onDeleteCurrentPage = {
+                        val state = loadedBookState ?: return@PhotobookEditorScreen
+                        val cp = state.currentPage
+                        if (cp !in state.pages.indices) return@PhotobookEditorScreen
+                        val updatedPages = PhotobookSlotActions.deletePageAt(state.pages, cp)
+                        val nextPage = cp.coerceAtMost(updatedPages.lastIndex).coerceAtLeast(0)
+                        setEditorBookState(
+                            state.copy(
+                                pages = updatedPages,
+                                currentPage = nextPage,
+                                selectedSlotId = null,
+                                selection = TypedEditorSelection.None
+                            )
+                        )
+                    },
                     onResetSelectedSlotImage = {
                         val state = loadedBookState ?: return@PhotobookEditorScreen
                         val cp = state.currentPage

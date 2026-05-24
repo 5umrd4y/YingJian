@@ -96,6 +96,7 @@ fun PhotobookEditorScreen(
     onSwapSelectedWithSlot: (String) -> Unit = {},
     onFillSelectedSlot: (BookState, Int, String) -> Unit = { _, _, _ -> },
     onDeleteSelectedSlotImage: () -> Unit = {},
+    onDeleteCurrentPage: () -> Unit = {},
     onResetSelectedSlotImage: () -> Unit = {},
     pageMoodText: String? = null,
     pageMemoryDate: Long? = null,
@@ -160,6 +161,20 @@ fun PhotobookEditorScreen(
         editingTextPageType = pageType
         editingTextId = element.id
         editingTextValue = element.text
+    }
+
+    fun deleteCurrentContentSelection() {
+        if (isCoverLeaf || isBackCoverLeaf) return
+        val pageIndex = currentLeafIndex - 1
+        val page = bookState.pages.getOrNull(pageIndex) ?: return
+        val hasAnyImage = page.slots.any { it.imageRef != null }
+        when {
+            !hasAnyImage -> onDeleteCurrentPage()
+            bookState.selectedSlotId != null -> onDeleteSelectedSlotImage()
+            else -> coroutineScope.launch {
+                activeSnackbarHostState.showSnackbar("请选择图片，或清空页面后删除页面")
+            }
+        }
     }
 
     Scaffold(
@@ -238,7 +253,7 @@ fun PhotobookEditorScreen(
                 onMoveClicked = {
                     if (!isCoverLeaf && !isBackCoverLeaf && bookState.selectedSlotId != null) showMoveSheet = true
                 },
-                onDeleteClicked = onDeleteSelectedSlotImage,
+                onDeleteClicked = { deleteCurrentContentSelection() },
                 onAddPageClicked = onAddPage,
                 modifier = Modifier
                     .align(Alignment.TopCenter)

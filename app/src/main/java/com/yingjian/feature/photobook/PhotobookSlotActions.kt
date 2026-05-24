@@ -93,6 +93,21 @@ object PhotobookSlotActions {
         }
     }
 
+    fun deletePageAt(pages: List<PageState>, pageIndex: Int): List<PageState> {
+        val page = pages.getOrNull(pageIndex) ?: return pages
+        if (pages.size == 1) {
+            return listOf(
+                emptyPage(pageNumber = 1, template = page.template).copy(
+                    trimWidthMm = page.trimWidthMm,
+                    trimHeightMm = page.trimHeightMm,
+                    bleedMm = page.bleedMm
+                )
+            )
+        }
+        return pages.filterIndexed { index, _ -> index != pageIndex }
+            .mapIndexed { index, remainingPage -> remainingPage.copy(pageNumber = index + 1) }
+    }
+
     fun moveImage(sourcePage: PageState, sourceSlotId: String, targetPage: PageState): MoveResult {
         val sourceSlot = sourcePage.slots.firstOrNull { it.slotId == sourceSlotId } ?: return MoveResult.SourceEmpty
         if (sourceSlot.imageRef == null) return MoveResult.SourceEmpty

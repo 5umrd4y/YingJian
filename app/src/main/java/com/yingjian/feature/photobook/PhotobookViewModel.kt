@@ -75,7 +75,8 @@ class PhotobookViewModel(
                     memoryRepository.getMemoryById(photo.memoryId)?.let { photo.memoryId to it }
                 }.toMap()
             }
-            val pages = selectedPhotos.mapIndexed { index, photo ->
+            val orderedPhotos = PhotobookPhotoOrdering.byMemoryDateAscending(selectedPhotos, memoryById)
+            val pages = orderedPhotos.mapIndexed { index, photo ->
                 val imageRef = ImageRef(
                     memoryId = photo.memoryId,
                     imageUri = photo.imageUri,
@@ -219,7 +220,8 @@ class PhotobookViewModel(
                 }.toMap()
             }
             val startPageNumber = currentState.pages.size + 1
-            val newPages = selectedPhotos.mapIndexed { index, photo ->
+            val orderedPhotos = PhotobookPhotoOrdering.byMemoryDateAscending(selectedPhotos, memoryById)
+            val newPages = orderedPhotos.mapIndexed { index, photo ->
                 val imageRef = ImageRef(
                     memoryId = photo.memoryId,
                     imageUri = photo.imageUri,

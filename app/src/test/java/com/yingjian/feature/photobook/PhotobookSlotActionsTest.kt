@@ -155,6 +155,32 @@ class PhotobookSlotActionsTest {
         assertTrue(updated[1].slots.single().isEmpty)
     }
 
+    @Test
+    fun `delete page at current index removes page and renumbers remaining pages`() {
+        val pages = listOf(
+            page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 1)), pageNumber = 1),
+            page(PageTemplate.SingleLandscape, listOf(empty("slot-1")), pageNumber = 2),
+            page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 3)), pageNumber = 3)
+        )
+
+        val updated = PhotobookSlotActions.deletePageAt(pages, pageIndex = 1)
+
+        assertEquals(2, updated.size)
+        assertEquals(listOf(1, 2), updated.map { it.pageNumber })
+        assertEquals("content://image/3", updated[1].slots.single().imageRef?.imageUri)
+    }
+
+    @Test
+    fun `delete last remaining page keeps one empty page`() {
+        val pages = listOf(page(PageTemplate.SingleLandscape, listOf(slot("slot-1", 1)), pageNumber = 1))
+
+        val updated = PhotobookSlotActions.deletePageAt(pages, pageIndex = 0)
+
+        assertEquals(1, updated.size)
+        assertEquals(1, updated.single().pageNumber)
+        assertTrue(updated.single().slots.single().isEmpty)
+    }
+
     private fun page(template: PageTemplate, slots: List<ImageSlot>, pageNumber: Int = 1) = PageState(
         pageNumber = pageNumber,
         template = template,
