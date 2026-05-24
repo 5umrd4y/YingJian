@@ -26,6 +26,7 @@ secrets.properties
 
 # Generated binaries
 *.apk
+*.idsig
 *.aab
 *.ap_
 *.dex
