@@ -222,9 +222,6 @@ fun PhotobookEditorScreen(
                     }
                     IconButton(onClick = {
                         onSave()
-                        coroutineScope.launch {
-                            activeSnackbarHostState.showSnackbar("已保存")
-                        }
                     }) {
                         Icon(Icons.Default.Save, contentDescription = "保存")
                     }

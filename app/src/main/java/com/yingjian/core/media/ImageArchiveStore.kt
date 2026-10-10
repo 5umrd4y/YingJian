@@ -37,6 +37,11 @@ class ImageArchiveStore(
         }.getOrDefault(false)
     }
 
+    fun deleteIfArchived(file: File): Boolean {
+        if (!isArchived(file)) return false
+        return file.isFile && file.delete()
+    }
+
     private fun uniqueTargetFile(extension: String): File {
         var candidate = archiveDir.resolve("${clock()}-${idFactory()}.$extension")
         while (candidate.exists() || File(candidate.parentFile, "${candidate.name}.tmp").exists()) {

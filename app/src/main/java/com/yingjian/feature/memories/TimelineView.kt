@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,12 +17,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -34,110 +35,91 @@ import java.util.Locale
 @Composable
 fun TimelineView(
     memories: List<MemoryRecordEntity>,
-    onMemoryClick: (MemoryRecordEntity) -> Unit = {}
+    onMemoryClick: (MemoryRecordEntity) -> Unit = {},
+    onAddPhoto: () -> Unit = {}
 ) {
-    if (memories.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "暂无照片",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    val sortedMemories = remember(memories) { memories.sortedByDescending { it.timestamp } }
+    val grouped = remember(sortedMemories) {
+        sortedMemories.groupBy { memory ->
+            val cal = Calendar.getInstance().apply { timeInMillis = memory.timestamp }
+            cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH)
         }
-        return
     }
-
-    // Group by year-month
-    val grouped = memories.groupBy { memory ->
-        val cal = Calendar.getInstance().apply { timeInMillis = memory.timestamp }
-        "${cal.get(Calendar.YEAR)}年${cal.get(Calendar.MONTH) + 1}月"
+    val monthFormatter = remember { SimpleDateFormat("yyyy年M月", Locale.getDefault()) }
+    val dayFormatter = remember { SimpleDateFormat("M月d日 EEEE", Locale.getDefault()) }
+    val today = Calendar.getInstance().run {
+        get(Calendar.YEAR) * 10_000 + get(Calendar.MONTH) * 100 + get(Calendar.DAY_OF_MONTH)
     }
-
-    val dateFormatter = SimpleDateFormat("yyyy年M月d日", Locale.getDefault())
+    val todayMemories = remember(sortedMemories, today) {
+        sortedMemories.filter { memory ->
+            val cal = Calendar.getInstance().apply { timeInMillis = memory.timestamp }
+            cal.get(Calendar.YEAR) * 10_000 + cal.get(Calendar.MONTH) * 100 + cal.get(Calendar.DAY_OF_MONTH) == today
+        }
+    }
+    val todayFormatter = remember { SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault()) }
 
     LazyColumn(modifier = Modifier.fillMaxWidth()) {
-        grouped.forEach { (monthLabel, monthMemories) ->
+        item {
+            TodayOverview(
+                date = todayFormatter.format(Calendar.getInstance().time),
+                recordCount = todayMemories.size,
+                onAddPhoto = onAddPhoto
+            )
+        }
+
+        if (memories.isEmpty()) {
             item {
                 Text(
-                    monthLabel,
+                    text = "照片会按拍摄日期留在这里",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp)
+                )
+            }
+        }
+
+        grouped.forEach { (monthKey, monthMemories) ->
+            item {
+                val monthStart = Calendar.getInstance().apply {
+                    set(Calendar.YEAR, monthKey.first)
+                    set(Calendar.MONTH, monthKey.second)
+                    set(Calendar.DAY_OF_MONTH, 1)
+                }
+                Text(
+                    text = monthFormatter.format(monthStart.time),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp)
                 )
             }
 
-            // Featured entry (first in month) — full width card
-            item {
-                val featured = monthMemories.first()
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Card(
+            val dailyGroups = monthMemories.groupBy { memory ->
+                val cal = Calendar.getInstance().apply { timeInMillis = memory.timestamp }
+                cal.get(Calendar.YEAR) * 10_000 + cal.get(Calendar.MONTH) * 100 + cal.get(Calendar.DAY_OF_MONTH)
+            }
+            dailyGroups.forEach { (dayKey, dayMemories) ->
+                item {
+                    val dayMemory = dayMemories.first()
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onMemoryClick(featured) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                        )
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Box {
-                                AsyncImage(
-                                    model = Uri.parse(featured.imageUri),
-                                    contentDescription = featured.moodText,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(4f / 3f)
-                                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                                )
-                                // Photo count badge (top-right)
-                                val allUris = remember(featured.imageUrisJson) { featured.getAllImageUris() }
-                                if (allUris.size > 1) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(8.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = "${allUris.size}",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = Color.White
-                                        )
-                                    }
-                                }
-                            }
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    dateFormatter.format(featured.timestamp),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (!featured.moodText.isNullOrBlank()) {
-                                    Text(
-                                        featured.moodText,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.padding(top = 4.dp)
-                                    )
-                                }
-                            }
-                        }
+                        Text(
+                        text = dayFormatter.format(dayMemory.timestamp),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (dayKey == today) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${dayMemories.size} 条影记",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
                     }
                 }
-            }
-
-            // Remaining entries — 2-column grid
-            if (monthMemories.size > 1) {
-                val restMemories = monthMemories.drop(1)
-                items(items = restMemories.chunked(2)) { rowItems ->
+                items(items = dayMemories.chunked(2)) { rowItems ->
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -164,20 +146,13 @@ fun TimelineView(
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                                     )
-                                    Column(modifier = Modifier.padding(8.dp)) {
+                                    if (!memory.moodText.isNullOrBlank()) {
                                         Text(
-                                            dateFormatter.format(memory.timestamp),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            text = memory.moodText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.padding(8.dp),
+                                            maxLines = 1
                                         )
-                                        if (!memory.moodText.isNullOrBlank()) {
-                                            Text(
-                                                memory.moodText,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                modifier = Modifier.padding(top = 2.dp),
-                                                maxLines = 1
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -195,6 +170,57 @@ fun TimelineView(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayOverview(
+    date: String,
+    recordCount: Int,
+    onAddPhoto: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, top = 18.dp, end = 12.dp, bottom = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "TODAY  /  ${Calendar.getInstance().get(Calendar.YEAR)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f)
+                )
+                Text(
+                    text = "今天",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(top = 3.dp)
+                )
+                Text(
+                    text = date,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                Text(
+                    text = if (recordCount == 0) "今天还没有影记" else "今天留下了 $recordCount 条影记",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+            TextButton(onClick = onAddPhoto) {
+                Text(if (recordCount == 0) "记录一刻" else "继续记录")
             }
         }
     }

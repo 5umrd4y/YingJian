@@ -109,6 +109,11 @@ data class PageLayoutEntity(
     val mode: String
 )
 
+data class PageCountByPhotobook(
+    val photobookId: Long,
+    val pageCount: Int
+)
+
 @Dao
 interface PageLayoutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -122,6 +127,9 @@ interface PageLayoutDao {
 
     @Query("SELECT COUNT(*) FROM page_layout WHERE photobookId = :photobookId")
     suspend fun countByPhotobookId(photobookId: Long): Int
+
+    @Query("SELECT photobookId, COUNT(*) AS pageCount FROM page_layout GROUP BY photobookId")
+    suspend fun countByPhotobookIds(): List<PageCountByPhotobook>
 }
 
 // --- Database ---

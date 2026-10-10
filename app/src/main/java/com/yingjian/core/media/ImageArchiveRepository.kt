@@ -35,6 +35,14 @@ class ImageArchiveRepository(
         return archiveUri(Uri.parse(uriString))
     }
 
+    fun deleteArchivedUriIfUnreferenced(uriString: String, referencedUris: Set<String>): Boolean {
+        if (uriString in referencedUris) return false
+        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return false
+        if (uri.scheme != "file") return false
+        val file = uri.path?.let(::File) ?: return false
+        return store.deleteIfArchived(file)
+    }
+
     private fun queryDisplayName(uri: Uri): String? {
         return runCatching {
             context.contentResolver.query(

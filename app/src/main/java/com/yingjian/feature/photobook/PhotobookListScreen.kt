@@ -46,6 +46,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -76,6 +78,13 @@ fun PhotobookListScreen(
 ) {
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val visiblePhotobooks = remember(viewModel.uiState.photobooks, searchQuery) {
+        val query = searchQuery.trim()
+        if (query.isEmpty()) viewModel.uiState.photobooks
+        else viewModel.uiState.photobooks.filter { it.name.contains(query, ignoreCase = true) }
+    }
 
     Scaffold(
         topBar = {
@@ -108,15 +117,35 @@ fun PhotobookListScreen(
             } else {
                 TopAppBar(
                     title = {
-                        Text(
-                            "画册",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        if (showSearch) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("搜索画册名称") },
+                                singleLine = true
+                            )
+                        } else {
+                            Text(
+                                "画册",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     },
                     actions = {
-                        IconButton(onClick = { /* MVP: placeholder */ }) {
-                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                        IconButton(onClick = {
+                            if (showSearch) {
+                                searchQuery = ""
+                                showSearch = false
+                            } else {
+                                showSearch = true
+                            }
+                        }) {
+                            Icon(
+                                imageVector = if (showSearch) Icons.Default.Close else Icons.Default.Search,
+                                contentDescription = if (showSearch) "关闭搜索" else "搜索画册"
+                            )
                         }
                     }
                 )
@@ -141,7 +170,7 @@ fun PhotobookListScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        "共 ${viewModel.uiState.photobooks.size} 册",
+                        "共 ${visiblePhotobooks.size} 册",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -156,14 +185,14 @@ fun PhotobookListScreen(
             }
 
             // "新建画册" card — first item (hidden in selection mode)
-            if (!viewModel.uiState.isSelectionMode) {
+            if (!viewModel.uiState.isSelectionMode && searchQuery.isBlank()) {
                 item {
                     CreateNewAlbumCard(onClick = { showCreateDialog = true })
                 }
             }
 
             // Photobook cover cards
-            items(viewModel.uiState.photobooks) { book ->
+            items(visiblePhotobooks) { book ->
                 val isSelected = book.id in viewModel.uiState.selectedIds
                 PhotobookCoverCard(
                     photobook = book,
@@ -184,8 +213,20 @@ fun PhotobookListScreen(
                 )
             }
 
+            if (showSearch && searchQuery.isNotBlank() && visiblePhotobooks.isEmpty()) {
+                item(span = { GridItemSpan(2) }) {
+                    Text(
+                        "没有找到“${searchQuery.trim()}”",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
             // "到底了" end marker
-            if (viewModel.uiState.photobooks.isNotEmpty()) {
+            if (visiblePhotobooks.isNotEmpty()) {
                 item(span = { GridItemSpan(2) }) {
                     Text(
                         "到底了",
@@ -287,6 +328,72 @@ private fun PhotobookCoverCard(
                             .aspectRatio(2f)
                             .clip(RoundedCornerShape(2.dp))
                     )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f)),
+                                    startY = 70f
+                                )
+                            )
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 14.dp, end = 12.dp, bottom = 12.dp)
+                    ) {
+                        Text(
+                            text = photobook.coverTitle?.takeIf { it.isNotBlank() } ?: photobook.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                        photobook.coverSubtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.82f),
+                                maxLines = 1,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(2.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "影 笺  ·  PHOTO BOOK",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF342D27).copy(alpha = 0.72f),
+                            letterSpacing = 1.1.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = photobook.coverTitle?.takeIf { it.isNotBlank() } ?: photobook.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFF342D27),
+                            textAlign = TextAlign.Center,
+                            maxLines = 2
+                        )
+                        photobook.coverSubtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF342D27).copy(alpha = 0.76f),
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -359,17 +466,25 @@ private fun CreateNewAlbumCard(onClick: () -> Unit) {
                 .background(PaperTexture),
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .border(1.dp, Color.Black.copy(alpha = 0.2f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    tint = Color.Black.copy(alpha = 0.6f),
-                    modifier = Modifier.size(20.dp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .border(1.dp, Color.Black.copy(alpha = 0.2f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Color.Black.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    "从影记制作一本",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Black.copy(alpha = 0.62f),
+                    modifier = Modifier.padding(top = 9.dp)
                 )
             }
         }

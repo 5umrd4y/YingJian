@@ -47,11 +47,8 @@ class PhotobookViewModel(
             val books = withContext(Dispatchers.IO) {
                 photobookRepository.getAllPhotobooks()
             }
-            val counts = mutableMapOf<Long, Int>()
-            books.forEach { book ->
-                withContext(Dispatchers.IO) {
-                    counts[book.id] = photobookRepository.getPageCount(book.id)
-                }
+            val counts = withContext(Dispatchers.IO) {
+                photobookRepository.getPageCountsByPhotobook()
             }
             uiState = uiState.copy(photobooks = books, pageCounts = counts)
         }

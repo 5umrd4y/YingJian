@@ -27,6 +27,10 @@ import com.yingjian.feature.photobook.model.toStaticLayoutAlignment
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 
+data class PdfWriteResult(
+    val missingImageCount: Int = 0
+)
+
 /**
  * Exports a BookState to a 300DPI PDF with crop marks.
  *
@@ -66,8 +70,9 @@ object PdfExportUtil {
         bookState: BookState,
         outputStream: OutputStream,
         memoryTimestamps: Map<Long, Long> = emptyMap()
-    ) {
+    ): PdfWriteResult {
         val document = PdfDocument()
+        var missingImageCount = 0
 
         try {
             // Try to load Noto Sans SC from assets, fall back to system default
@@ -115,7 +120,9 @@ object PdfExportUtil {
                 slotRects.forEach { rect ->
                     val slot = pageState.slots.firstOrNull { it.slotId == rect.slotId }
                     if (slot?.imageRef != null) {
-                        renderImageSlot(context, canvas, rect, slot)
+                        if (!renderImageSlot(context, canvas, rect, slot)) {
+                            missingImageCount++
+                        }
                     }
                 }
                 drawCropMarks(canvas, pageWidthPx, pageHeightPx)
@@ -140,6 +147,7 @@ object PdfExportUtil {
             document.finishPage(backPage)
 
             document.writeTo(outputStream)
+            return PdfWriteResult(missingImageCount = missingImageCount)
         } finally {
             document.close()
         }
@@ -185,16 +193,16 @@ object PdfExportUtil {
         }
     }
 
-    private fun renderImageSlot(context: Context, canvas: Canvas, rect: SlotRectMm, slot: ImageSlot) {
-        runCatching {
-            val imageRef = slot.imageRef ?: return@runCatching
+    private fun renderImageSlot(context: Context, canvas: Canvas, rect: SlotRectMm, slot: ImageSlot): Boolean {
+        return runCatching {
+            val imageRef = slot.imageRef ?: return true
             val uri = Uri.parse(imageRef.imageUri)
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return@runCatching
             val targetWidthPx = mmToPx(rect.widthMm * slot.cropScale).coerceAtLeast(1)
             val targetHeightPx = mmToPx(rect.heightMm * slot.cropScale).coerceAtLeast(1)
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeStream(inputStream, null, options)
-            inputStream.close()
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream, null, options)
+            } ?: return false
 
             val inSampleSize = PdfImageRenderMath.calculateInSampleSize(
                 options.outWidth, options.outHeight,
@@ -202,14 +210,13 @@ object PdfExportUtil {
                 MAX_DECODE_DIMENSION_PX
             )
 
-            val bitmapStream = context.contentResolver.openInputStream(uri)
-            val bitmap = BitmapFactory.decodeStream(
-                bitmapStream,
-                null,
-                BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
-            )
-            bitmapStream?.close()
-            if (bitmap == null) return@runCatching
+            val bitmap = context.contentResolver.openInputStream(uri)?.use { bitmapStream ->
+                BitmapFactory.decodeStream(
+                    bitmapStream,
+                    null,
+                    BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
+                )
+            } ?: return false
 
             val x = mmToPxFloat(rect.xMm)
             val y = mmToPxFloat(rect.yMm)
@@ -235,7 +242,8 @@ object PdfExportUtil {
             canvas.drawBitmap(bitmap, null, RectF(dest.left, dest.top, dest.right, dest.bottom), null)
             canvas.restore()
             bitmap.recycle()
-        }
+            true
+        }.getOrDefault(false)
     }
 
     private fun renderText(canvas: Canvas, element: TextElement, typeface: Typeface) {

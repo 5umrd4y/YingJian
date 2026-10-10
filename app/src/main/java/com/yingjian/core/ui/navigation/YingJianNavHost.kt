@@ -2,10 +2,12 @@ package com.yingjian.core.ui.navigation
 
 import android.net.Uri
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,7 +59,6 @@ import com.yingjian.core.util.CoverLayoutSerializer
 import com.yingjian.core.util.PageLayoutDocumentSerializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.builtins.ListSerializer
@@ -70,8 +71,8 @@ fun YingJianNavHost(
     startDestination: String = NavDestinations.Memories.route,
     deps: AppDependencies
 ) {
-    var refreshTrigger by remember { mutableStateOf(0) }
-    var memoryRefreshTrigger by remember { mutableStateOf(0) }
+    var refreshTrigger by remember { mutableIntStateOf(0) }
+    var memoryRefreshTrigger by remember { mutableIntStateOf(0) }
     var pendingPublish by remember { mutableStateOf<MemoryRecordEntity?>(null) }
     val navHostScope = rememberCoroutineScope()
 
@@ -189,6 +190,7 @@ fun YingJianNavHost(
             )
         }
         composable(NavDestinations.NewPost.route) { backStackEntry ->
+            val context = LocalContext.current
             val (uris, _, dates) = remember {
                 val urisJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostUris")
                 val datesJsonStr = navController.previousBackStackEntry?.savedStateHandle?.get<String>("newPostDates")
@@ -212,13 +214,14 @@ fun YingJianNavHost(
             }
 
             if (uris.isNotEmpty() && dates.isNotEmpty()) {
-                val firstMetadata = getImageMetadata(LocalContext.current, uris.first())
-
                 NewPostScreen(
                     imageUris = uris,
                     datesTaken = dates,
                     onPublish = { mood, tags, currentUris, currentDates ->
                         navHostScope.launch {
+                            val firstMetadata = currentUris.firstOrNull()
+                                ?.let { getImageMetadata(context, it) }
+                                ?: Triple(0, 0, currentDates.firstOrNull() ?: System.currentTimeMillis())
                             val archivedUriStrings = withContext(Dispatchers.IO) {
                                 deps.imageArchiveRepository.archiveUris(currentUris)
                             }
@@ -338,21 +341,39 @@ fun YingJianNavHost(
                         onBack = { navController.popBackStack() },
                         onUpdate = { updatedMemory ->
                             navHostScope.launch {
+                                val removedUris = memoryEntity.getAllImageUris().toSet() -
+                                    updatedMemory.getAllImageUris().toSet()
                                 withContext(Dispatchers.IO) {
                                     deps.memoryRepository.updateMemory(updatedMemory)
+                                    val referencedUris = collectReferencedImageUris(deps)
+                                    removedUris.forEach { removedUri ->
+                                        deps.imageArchiveRepository.deleteArchivedUriIfUnreferenced(
+                                            removedUri,
+                                            referencedUris
+                                        )
+                                    }
                                 }
                                 memoryRefreshTrigger++
+                                refreshTrigger++
                             }
-                            refreshTrigger++
                         },
                         onDelete = {
                             navHostScope.launch {
+                                val removedUris = memoryEntity.getAllImageUris()
                                 withContext(Dispatchers.IO) {
                                     deps.memoryRepository.deleteMemory(memoryEntity)
+                                    val referencedUris = collectReferencedImageUris(deps)
+                                    removedUris.forEach { removedUri ->
+                                        deps.imageArchiveRepository.deleteArchivedUriIfUnreferenced(
+                                            removedUri,
+                                            referencedUris
+                                        )
+                                    }
                                 }
+                                memoryRefreshTrigger++
+                                refreshTrigger++
                             }
                             navController.popBackStack()
-                            refreshTrigger++
                         },
                         onAddPhotos = { _ ->
                             val currentCount = memoryEntity.getAllImageUris().size
@@ -518,7 +539,11 @@ fun YingJianNavHost(
                             } ?: error("Unable to open PDF output stream")
                         }
                     }.onSuccess {
-                        editorSnackbarHostState.showSnackbar("画册导出成功")
+                        if (it.missingImageCount > 0) {
+                            editorSnackbarHostState.showSnackbar("导出完成，${it.missingImageCount} 张图片无法读取")
+                        } else {
+                            editorSnackbarHostState.showSnackbar("画册导出成功")
+                        }
                     }.onFailure {
                         editorSnackbarHostState.showSnackbar("导出失败，请重试")
                     }
@@ -659,26 +684,30 @@ fun YingJianNavHost(
                         val currentState = loadedBookState
                         if (currentState != null) {
                             coroutineScope.launch {
-                                withContext(Dispatchers.IO) {
-                                    deps.photobookRepository.deletePageLayouts(currentState.photobook.id)
-                                    currentState.pages.forEach { page ->
-                                        deps.photobookRepository.savePageLayout(
-                                            PageLayoutEntity(
-                                                photobookId = currentState.photobook.id,
-                                                pageNumber = page.pageNumber,
-                                                elementsJson = com.yingjian.core.util.PageLayoutDocumentSerializer.serialize(
-                                                    page.toDocument()
-                                                ),
-                                                mode = currentState.mode.name
-                                            )
-                                        )
-                                    }
+                                runCatching {
                                     val updatedPhotobook = currentState.photobook.copy(
                                         coverLayoutJson = CoverLayoutSerializer.serialize(currentState.coverLayout),
                                         backCoverLayoutJson = CoverLayoutSerializer.serialize(currentState.backCoverLayout),
                                         updatedAt = System.currentTimeMillis()
                                     )
-                                    deps.photobookRepository.updatePhotobook(updatedPhotobook)
+                                    val pageLayouts = currentState.pages.map { page ->
+                                        PageLayoutEntity(
+                                            photobookId = currentState.photobook.id,
+                                            pageNumber = page.pageNumber,
+                                            elementsJson = PageLayoutDocumentSerializer.serialize(page.toDocument()),
+                                            mode = currentState.mode.name
+                                        )
+                                    }
+                                    withContext(Dispatchers.IO) {
+                                        deps.photobookRepository.replacePageLayoutsAndUpdatePhotobook(
+                                            photobook = updatedPhotobook,
+                                            pageLayouts = pageLayouts
+                                        )
+                                    }
+                                    setEditorBookState(currentState.copy(photobook = updatedPhotobook))
+                                    editorSnackbarHostState.showSnackbar("已保存")
+                                }.onFailure {
+                                    editorSnackbarHostState.showSnackbar("保存失败，请重试")
                                 }
                             }
                         }
@@ -773,20 +802,25 @@ fun YingJianNavHost(
                         val selectedSlotId = state.selectedSlotId ?: return@PhotobookEditorScreen
                         val slot = page.slots.firstOrNull { it.slotId == selectedSlotId && it.imageRef != null } ?: return@PhotobookEditorScreen
                         val slotImageRef = slot.imageRef ?: return@PhotobookEditorScreen
-                        val memory = runBlocking { withContext(Dispatchers.IO) { deps.memoryRepository.getMemoryById(slotImageRef.memoryId) } } ?: return@PhotobookEditorScreen
-                        val paperSize = runCatching { PaperSize.valueOf(state.photobook.paperSize) }.getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
-                        val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
-                            imageRef = slotImageRef,
-                            moodText = memory?.moodText,
-                            paperSize = paperSize,
-                            pageNumber = page.pageNumber
-                        )
-                        val updatedPages = state.pages.toMutableList()
-                        updatedPages[cp] = resetPage.copy(
-                            slots = resetPage.slots.map { s -> if (s.slotId == selectedSlotId) s.copy(slotId = selectedSlotId) else s },
-                            template = page.template
-                        )
-                        setEditorBookState(state.copy(pages = updatedPages, selectedSlotId = null))
+                        coroutineScope.launch {
+                            val memory = withContext(Dispatchers.IO) {
+                                deps.memoryRepository.getMemoryById(slotImageRef.memoryId)
+                            } ?: return@launch
+                            val paperSize = runCatching { PaperSize.valueOf(state.photobook.paperSize) }
+                                .getOrDefault(PaperSize.TWELVE_INCH_LANDSCAPE)
+                            val resetPage = AutoLayoutAlgorithm.createSinglePhotoPage(
+                                imageRef = slotImageRef,
+                                moodText = memory.moodText,
+                                paperSize = paperSize,
+                                pageNumber = page.pageNumber
+                            )
+                            val updatedPages = state.pages.toMutableList()
+                            updatedPages[cp] = resetPage.copy(
+                                slots = resetPage.slots.map { s -> if (s.slotId == selectedSlotId) s.copy(slotId = selectedSlotId) else s },
+                                template = page.template
+                            )
+                            setEditorBookState(state.copy(pages = updatedPages, selectedSlotId = null))
+                        }
                     },
                     onMoveSelectedToPreviousPage = {
                         val state = loadedBookState ?: return@PhotobookEditorScreen
@@ -865,10 +899,10 @@ fun YingJianNavHost(
                     },
                     snackbarHostState = editorSnackbarHostState,
                     isExportingPdf = isExportingPdf,
-	                    pageMoodText = currentMemory?.moodText,
-	                    pageMemoryDate = currentMemory?.timestamp
-	                )
-	        } else {
+                    pageMoodText = currentMemory?.moodText,
+                    pageMemoryDate = currentMemory?.timestamp
+                )
+        } else {
             androidx.compose.material3.Text("Loading...")
         }
         }
@@ -932,27 +966,27 @@ fun YingJianNavHost(
                     onShare = {
                         previewCoroutineScope.launch {
                             runCatching {
-                                val shareFile = withContext(Dispatchers.IO) {
+                                val shareResult = withContext(Dispatchers.IO) {
                                     val memoryTimestamps = loadPdfMemoryTimestamps(
                                         state,
                                         deps.memoryRepository
                                     )
                                     val cacheDir = context.cacheDir
-                                    java.io.File(cacheDir, "photobook_${state.photobook.id}.pdf").also { file ->
-                                        file.outputStream().use { stream ->
-                                            PdfExportUtil.writePdf(
-                                                context,
-                                                state,
-                                                stream,
-                                                memoryTimestamps
-                                            )
-                                        }
+                                    val shareFile = java.io.File(cacheDir, "photobook_${state.photobook.id}.pdf")
+                                    val writeResult = shareFile.outputStream().use { stream ->
+                                        PdfExportUtil.writePdf(
+                                            context,
+                                            state,
+                                            stream,
+                                            memoryTimestamps
+                                        )
                                     }
+                                    shareFile to writeResult
                                 }
                                 val uri = androidx.core.content.FileProvider.getUriForFile(
                                     context,
                                     "${context.packageName}.fileprovider",
-                                    shareFile
+                                    shareResult.first
                                 )
                                 val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                     type = "application/pdf"
@@ -960,6 +994,15 @@ fun YingJianNavHost(
                                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
                                 context.startActivity(android.content.Intent.createChooser(shareIntent, "分享画册"))
+                                if (shareResult.second.missingImageCount > 0) {
+                                    Toast.makeText(
+                                        context,
+                                        "分享 PDF 中有 ${shareResult.second.missingImageCount} 张图片无法读取",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }.onFailure {
+                                Toast.makeText(context, "分享失败，请重试", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -981,6 +1024,26 @@ private suspend fun loadPdfMemoryTimestamps(
     if (memoryIds.isEmpty()) return emptyMap()
     return memoryRepository.getMemoriesByIds(memoryIds)
         .associate { memory -> memory.id to memory.timestamp }
+}
+
+private suspend fun collectReferencedImageUris(deps: AppDependencies): Set<String> {
+    val referencedUris = mutableSetOf<String>()
+
+    deps.memoryRepository.getAllMemories().forEach { memory ->
+        referencedUris += memory.getAllImageUris()
+    }
+
+    deps.photobookRepository.getAllPhotobooks().forEach { photobook ->
+        photobook.coverImageUri?.let { referencedUris += it }
+        deps.photobookRepository.getPageLayouts(photobook.id).forEach { layout ->
+            val document = runCatching {
+                PageLayoutDocumentSerializer.deserialize(layout.elementsJson)
+            }.getOrNull() ?: return@forEach
+            document.slots.mapNotNullTo(referencedUris) { slot -> slot.imageRef?.imageUri }
+        }
+    }
+
+    return referencedUris
 }
 
 @Composable

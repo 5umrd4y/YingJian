@@ -34,4 +34,34 @@ class ImageArchiveStoreTest {
         assertTrue(archivedFile.name.endsWith(".jpg"))
         assertArrayEquals(bytes, archivedFile.readBytes())
     }
+
+    @Test
+    fun deleteIfArchivedDeletesOnlyArchivedFiles() {
+        val root = temporaryFolder.newFolder("files")
+        val store = ImageArchiveStore(
+            rootDir = root,
+            clock = { 1234L },
+            idFactory = { "image-id" }
+        )
+        val archivedFile = store.archive(
+            displayName = "photo.jpg",
+            mimeType = "image/jpeg",
+            openInputStream = { ByteArrayInputStream(byteArrayOf(1, 2, 3)) }
+        )
+
+        assertTrue(store.deleteIfArchived(archivedFile))
+        assertTrue(!archivedFile.exists())
+    }
+
+    @Test
+    fun deleteIfArchivedIgnoresFilesOutsideArchive() {
+        val root = temporaryFolder.newFolder("files")
+        val store = ImageArchiveStore(rootDir = root)
+        val outsideFile = File(root, "outside.jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+
+        assertTrue(!store.deleteIfArchived(outsideFile))
+        assertTrue(outsideFile.exists())
+    }
 }

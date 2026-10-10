@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -70,6 +72,7 @@ fun NewPostScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var previewIndex by rememberSaveable { mutableIntStateOf(0) }
     val uris = remember { mutableStateListOf(*imageUris.toTypedArray()) }
     val dates = remember { mutableStateListOf(*datesTaken.toTypedArray()) }
@@ -92,9 +95,11 @@ fun NewPostScreen(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             }
-            val (_, _, dateMs) = getImageMetadata(context, pickedUri)
-            uris.add(pickedUri)
-            dates.add(dateMs)
+            coroutineScope.launch {
+                val (_, _, dateMs) = getImageMetadata(context, pickedUri)
+                uris.add(pickedUri)
+                dates.add(dateMs)
+            }
         }
     }
 
@@ -108,9 +113,11 @@ fun NewPostScreen(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             }
-            val (_, _, dateMs) = getImageMetadata(context, pickedUri)
-            uris.add(pickedUri)
-            dates.add(dateMs)
+            coroutineScope.launch {
+                val (_, _, dateMs) = getImageMetadata(context, pickedUri)
+                uris.add(pickedUri)
+                dates.add(dateMs)
+            }
         }
     }
 
